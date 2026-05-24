@@ -1,0 +1,1872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MotoShop — Motorcycle Repair Manager</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<style>
+  :root {
+    --bg: #0e0f11; --bg2: #161719; --bg3: #1e2024;
+    --border: rgba(255,255,255,0.07); --border2: rgba(255,255,255,0.13);
+    --text: #f0f0ee; --muted: #8a8d94;
+    --accent: #d4f54a; --accent-dim: rgba(212,245,74,0.12); --accent-text: #2a3000;
+    --blue: #4a90d4; --blue-dim: rgba(74,144,212,0.15);
+    --orange: #f5944a; --orange-dim: rgba(245,148,74,0.15);
+    --red: #e84848; --red-dim: rgba(232,72,72,0.13);
+    --green: #4ad48a; --green-dim: rgba(74,212,138,0.13);
+    --gray-dim: rgba(255,255,255,0.06);
+    --wa: #25D366; --wa-dim: rgba(37,211,102,0.13);
+    --radius: 10px; --radius-lg: 16px;
+    --sidebar: 224px;
+    --font-display: 'Syne', sans-serif;
+    --font-body: 'DM Sans', sans-serif;
+    --font-mono: 'DM Mono', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-body); font-size: 14px; line-height: 1.5; min-height: 100vh; overflow-x: hidden; }
+
+  /* ── SETUP WIZARD ── */
+  .setup-container { position: fixed; inset: 0; background: var(--bg); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+  .setup-box { background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--radius-lg); padding: 40px; width: 500px; max-width: 92vw; }
+  .setup-box h1 { font-family: var(--font-display); font-size: 24px; color: var(--accent); margin-bottom: 8px; }
+  .setup-box .subtitle { color: var(--muted); margin-bottom: 28px; font-size: 13px; }
+  .step { display: none; }
+  .step.active { display: block; }
+  .step-indicator { display: flex; gap: 8px; margin-bottom: 28px; }
+  .step-dot { flex: 1; height: 4px; background: var(--border); border-radius: 2px; transition: background 0.3s; }
+  .step-dot.active, .step-dot.done { background: var(--accent); }
+
+  /* ── LOGIN ── */
+  .login-container { position: fixed; inset: 0; background: var(--bg); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+  .login-box { background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--radius-lg); padding: 40px; width: 420px; max-width: 92vw; }
+
+  /* ── SIDEBAR ── */
+  #sidebar { position: fixed; top: 0; left: 0; width: var(--sidebar); height: 100vh; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; z-index: 100; }
+  .sidebar-logo { padding: 20px 20px 16px; border-bottom: 1px solid var(--border); }
+  .sidebar-logo h1 { font-family: var(--font-display); font-size: 18px; font-weight: 800; color: var(--accent); letter-spacing: -0.5px; }
+  .sidebar-logo p { font-size: 11px; color: var(--muted); margin-top: 2px; font-family: var(--font-mono); }
+  .nav-section { padding: 12px 10px 4px; }
+  .nav-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); padding: 0 10px 6px; font-family: var(--font-mono); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius); cursor: pointer; color: var(--muted); font-size: 13px; font-weight: 500; transition: all 0.15s; margin-bottom: 2px; user-select: none; }
+  .nav-item:hover { background: var(--gray-dim); color: var(--text); }
+  .nav-item.active { background: var(--accent-dim); color: var(--accent); }
+  .nav-item i { width: 16px; text-align: center; font-size: 14px; }
+  .nav-badge { margin-left: auto; background: var(--red); color: #fff; font-size: 10px; font-family: var(--font-mono); font-weight: 500; padding: 1px 6px; border-radius: 20px; min-width: 18px; text-align: center; }
+  .sidebar-footer { margin-top: auto; padding: 12px 10px; border-top: 1px solid var(--border); }
+  .shop-info { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius); background: var(--gray-dim); }
+  .shop-avatar { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); display: flex; align-items: center; justify-content: center; color: var(--accent-text); font-weight: 700; font-size: 12px; font-family: var(--font-display); flex-shrink: 0; }
+  .shop-name-txt { font-size: 12px; font-weight: 500; }
+  .shop-role-txt { font-size: 11px; color: var(--muted); }
+  .logout-btn { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--radius); cursor: pointer; color: var(--muted); font-size: 12px; margin-top: 4px; transition: all 0.15s; }
+  .logout-btn:hover { background: var(--red-dim); color: var(--red); }
+
+  /* ── MAIN ── */
+  #main { margin-left: var(--sidebar); min-height: 100vh; }
+  .page { display: none; padding: 28px 32px; }
+  .page.active { display: block; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+  .page-title { font-family: var(--font-display); font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
+  .page-subtitle { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  /* ── BUTTONS ── */
+  .btn { display: inline-flex; align-items: center; gap: 7px; padding: 8px 16px; border-radius: var(--radius); font-family: var(--font-body); font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all 0.15s; }
+  .btn-primary { background: var(--accent); color: var(--accent-text); }
+  .btn-primary:hover { background: #c8ec30; transform: translateY(-1px); }
+  .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border2); }
+  .btn-ghost:hover { background: var(--gray-dim); color: var(--text); }
+  .btn-danger { background: var(--red-dim); color: var(--red); border: none; }
+  .btn-danger:hover { background: rgba(232,72,72,0.22); }
+  .btn-wa { background: var(--wa-dim); color: var(--wa); border: none; }
+  .btn-wa:hover { background: rgba(37,211,102,0.22); }
+  .btn-sm { padding: 5px 11px; font-size: 12px; }
+  .btn-icon { padding: 7px; border-radius: 8px; }
+
+  /* ── STATS ── */
+  .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px; }
+  .stat-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px 20px; }
+  .stat-card:hover { border-color: var(--border2); }
+  .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.6px; font-family: var(--font-mono); margin-bottom: 8px; }
+  .stat-value { font-family: var(--font-display); font-size: 28px; font-weight: 700; letter-spacing: -1px; }
+  .stat-delta { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .stat-delta.up { color: var(--green); }
+  .stat-delta.warn { color: var(--orange); }
+  .stat-delta.danger { color: var(--red); }
+
+  /* ── KANBAN ── */
+  .kanban-board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .kanban-col { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); display: flex; flex-direction: column; min-height: 400px; }
+  .kanban-col-header { padding: 14px 16px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .kanban-col-title { font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+  .col-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .col-dot.pending { background: var(--orange); }
+  .col-dot.inprogress { background: var(--blue); }
+  .col-dot.ready { background: var(--green); }
+  .col-dot.delivered { background: var(--muted); }
+  .col-count { font-size: 11px; color: var(--muted); font-family: var(--font-mono); background: var(--gray-dim); padding: 2px 7px; border-radius: 20px; }
+  .kanban-cards { padding: 10px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+  .job-card { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; cursor: pointer; transition: all 0.15s; position: relative; }
+  .job-card:hover { border-color: var(--border2); transform: translateY(-1px); }
+  .job-card.overdue { border-color: var(--red); }
+  .job-card.overdue::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: var(--red); border-radius: var(--radius) var(--radius) 0 0; }
+  .job-bike { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+  .job-customer { font-size: 12px; color: var(--muted); margin-bottom: 8px; display: flex; align-items: center; gap: 5px; }
+  .job-meta { display: flex; align-items: center; justify-content: space-between; }
+  .job-mechanic { font-size: 11px; background: var(--blue-dim); color: var(--blue); padding: 3px 8px; border-radius: 20px; font-family: var(--font-mono); }
+  .job-sla { font-size: 11px; color: var(--muted); font-family: var(--font-mono); display: flex; align-items: center; gap: 4px; }
+  .job-sla.danger { color: var(--red); }
+  .job-type-badge { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 4px; font-family: var(--font-mono); font-weight: 500; margin-bottom: 6px; display: inline-block; }
+  .badge-repair { background: var(--orange-dim); color: var(--orange); }
+  .badge-service { background: var(--blue-dim); color: var(--blue); }
+  .badge-custom { background: var(--accent-dim); color: var(--accent); }
+
+  /* ── TABLE ── */
+  .table-wrap { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; }
+  thead tr { border-bottom: 1px solid var(--border); }
+  th { padding: 11px 16px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); font-family: var(--font-mono); font-weight: 500; }
+  td { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: var(--gray-dim); cursor: pointer; }
+  .status-pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; font-family: var(--font-mono); }
+  .status-PENDING { background: var(--orange-dim); color: var(--orange); }
+  .status-IN_PROGRESS { background: var(--blue-dim); color: var(--blue); }
+  .status-READY { background: var(--green-dim); color: var(--green); }
+  .status-DELIVERED { background: var(--gray-dim); color: var(--muted); }
+  .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 4px; background: var(--gray-dim); color: var(--muted); font-family: var(--font-mono); }
+
+  /* ── MECHANICS GRID ── */
+  .mechanics-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .mech-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px 20px; }
+  .mech-avatar { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-weight: 700; font-size: 16px; margin-bottom: 12px; background: var(--accent-dim); color: var(--accent); }
+  .mech-name { font-weight: 600; font-size: 14px; margin-bottom: 3px; }
+  .mech-spec { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+  .mech-stats { display: flex; gap: 12px; margin-bottom: 14px; }
+  .mech-stat { text-align: center; }
+  .mech-stat-val { font-family: var(--font-mono); font-size: 18px; font-weight: 500; }
+  .mech-stat-lbl { font-size: 10px; color: var(--muted); margin-top: 1px; }
+  .workload-bar { height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden; margin-bottom: 14px; }
+  .workload-fill { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.4s; }
+  .workload-fill.danger { background: var(--red); }
+
+  /* ── CUSTOMER SEARCH ── */
+  .customer-search { margin-bottom: 16px; }
+  .search-input-wrap { position: relative; max-width: 340px; }
+  .search-input-wrap i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 13px; pointer-events: none; }
+  .search-input { padding-left: 36px !important; }
+
+  /* ── MODAL ── */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+  .modal-overlay.open { opacity: 1; pointer-events: all; }
+  .modal { background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--radius-lg); width: 540px; max-width: 95vw; max-height: 90vh; overflow-y: auto; transform: translateY(12px); transition: transform 0.2s; }
+  .modal-overlay.open .modal { transform: translateY(0); }
+  .modal-header { padding: 20px 24px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .modal-title { font-family: var(--font-display); font-size: 16px; font-weight: 700; }
+  .modal-body { padding: 20px 24px; }
+  .modal-footer { padding: 14px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
+  .form-group { margin-bottom: 16px; }
+  .form-label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; font-family: var(--font-mono); }
+  .form-input { width: 100%; background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 9px 13px; color: var(--text); font-family: var(--font-body); font-size: 13px; transition: border-color 0.15s; outline: none; }
+  .form-input:focus { border-color: var(--accent); }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  select.form-input { cursor: pointer; }
+  textarea.form-input { resize: vertical; min-height: 80px; }
+
+  /* ── DETAIL MODAL ── */
+  .detail-row { display: flex; padding: 9px 0; border-bottom: 1px solid var(--border); }
+  .detail-label { width: 130px; font-size: 12px; color: var(--muted); font-family: var(--font-mono); flex-shrink: 0; padding-top: 1px; }
+  .detail-value { font-size: 13px; }
+  .divider { height: 1px; background: var(--border); margin: 18px 0; }
+
+  /* ── OVERDUE BANNER ── */
+  .overdue-banner { background: var(--red-dim); border: 1px solid rgba(232,72,72,0.25); border-radius: var(--radius-lg); padding: 14px 18px; margin-bottom: 20px; display: none; align-items: center; gap: 12px; }
+  .overdue-banner.visible { display: flex; }
+  .overdue-banner i { color: var(--red); font-size: 18px; flex-shrink: 0; }
+
+  /* ── EMPTY STATE ── */
+  .empty-state { text-align: center; padding: 48px 20px; color: var(--muted); }
+  .empty-state i { font-size: 32px; margin-bottom: 12px; opacity: 0.4; display: block; }
+
+  /* ── TOAST ── */
+  #toast { position: fixed; bottom: 24px; right: 24px; background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--radius); padding: 12px 18px; font-size: 13px; z-index: 9999; transform: translateY(10px); opacity: 0; transition: all 0.25s; display: flex; align-items: center; gap: 10px; max-width: 300px; pointer-events: none; }
+  #toast.show { opacity: 1; transform: translateY(0); }
+  #toast.success i { color: var(--green); }
+  #toast.error i { color: var(--red); }
+  #toast.info i { color: var(--blue); }
+
+  /* ── ERROR BOX ── */
+  .error-box { background: var(--red-dim); border: 1px solid rgba(232,72,72,0.3); padding: 10px 14px; border-radius: var(--radius); color: var(--red); font-size: 12px; margin-bottom: 18px; display: none; }
+
+  /* ── WHATSAPP BRIDGE PANEL ── */
+  #wa-panel { position: fixed; bottom: 24px; left: calc(var(--sidebar) + 24px); z-index: 500; }
+
+  /* WA Modal */
+  #wa-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 600; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+  #wa-modal-overlay.open { opacity: 1; pointer-events: all; }
+  #wa-modal { background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--radius-lg); width: 500px; max-width: 95vw; transform: translateY(12px); transition: transform 0.2s; }
+  #wa-modal-overlay.open #wa-modal { transform: translateY(0); }
+  .wa-modal-header { padding: 18px 22px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+  .wa-modal-title { font-family: var(--font-display); font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 9px; }
+  .wa-modal-title i { color: var(--wa); }
+  .wa-modal-body { padding: 20px 22px; }
+  .wa-progress { font-size: 12px; color: var(--muted); margin-bottom: 14px; font-family: var(--font-mono); }
+  .wa-job-info { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 14px; font-size: 12px; }
+  .wa-job-info strong { font-size: 13px; display: block; margin-bottom: 4px; color: var(--text); }
+  .wa-job-info span { color: var(--muted); }
+  .wa-message-box { width: 100%; background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 12px; color: var(--text); font-family: var(--font-body); font-size: 13px; resize: vertical; min-height: 120px; outline: none; transition: border-color 0.15s; line-height: 1.6; }
+  .wa-message-box:focus { border-color: var(--wa); }
+  .wa-customer-line { font-size: 12px; color: var(--muted); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .wa-customer-line strong { color: var(--text); }
+  .wa-modal-footer { padding: 14px 22px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .wa-actions { display: flex; gap: 8px; }
+  .wa-skip-link { font-size: 12px; color: var(--muted); cursor: pointer; text-decoration: underline; }
+  .wa-recip-tab { display:flex; align-items:center; gap:6px; padding:6px 14px; border-radius:var(--radius); font-size:12px; font-weight:500; cursor:pointer; border:1px solid var(--border2); background:transparent; color:var(--muted); transition:all 0.15s; }
+  .wa-recip-tab.active { background:var(--wa-dim); color:var(--wa); border-color:var(--wa); }
+  .wa-recip-tab i { font-size:12px; }
+  .wa-skip-link:hover { color: var(--text); }
+
+  /* ── SETTINGS ── */
+  .settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .settings-section { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 22px 24px; }
+  .settings-section-title { font-family: var(--font-display); font-size: 14px; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+  .settings-section-desc { font-size: 12px; color: var(--muted); margin-bottom: 18px; }
+  .settings-status { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-family: var(--font-mono); padding: 3px 10px; border-radius: 20px; margin-left: auto; }
+  .settings-status.connected { background: var(--green-dim); color: var(--green); }
+  .settings-status.disconnected { background: var(--red-dim); color: var(--red); }
+  .settings-status.pending { background: var(--orange-dim); color: var(--orange); }
+  .wa-bridge-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+  .wa-tab { padding: 6px 14px; border-radius: var(--radius); font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border2); background: transparent; color: var(--muted); transition: all 0.15s; }
+  .wa-tab.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+  .env-hint { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; font-family: var(--font-mono); font-size: 11px; color: var(--muted); line-height: 1.8; margin-top: 10px; }
+  .env-hint strong { color: var(--accent); }
+
+  /* ── CHECKLIST ── */
+  .checklist-item { display:flex; align-items:center; gap:8px; padding:5px 6px; border-radius:6px; transition:background 0.1s; }
+  .checklist-item:hover { background:var(--bg2); }
+  .checklist-item input[type=checkbox] { width:15px; height:15px; accent-color:var(--accent); cursor:pointer; flex-shrink:0; }
+  .checklist-item .cl-label { font-size:12px; flex:1; cursor:pointer; transition:all 0.15s; }
+  .checklist-item.done .cl-label { text-decoration:line-through; color:var(--muted); }
+  .checklist-item .cl-del { background:none; border:none; color:var(--muted); cursor:pointer; padding:2px 5px; border-radius:4px; font-size:11px; opacity:0; transition:opacity 0.15s; }
+  .checklist-item:hover .cl-del { opacity:1; }
+  .checklist-item .cl-del:hover { color:var(--red); }
+  .cl-progress { font-size:10px; color:var(--muted); font-family:var(--font-mono); margin-bottom:6px; }
+  .detail-checklist { display:flex; flex-direction:column; gap:4px; }
+  .detail-cl-item { display:flex; align-items:center; gap:8px; font-size:12px; padding:3px 0; }
+  .detail-cl-item i { font-size:11px; flex-shrink:0; }
+  .detail-cl-item.done { color:var(--muted); }
+  .detail-cl-item.done i { color:var(--green); }
+  .detail-cl-item:not(.done) i { color:var(--orange); }
+
+  /* ── SPINNER ── */
+  .spinner { width: 16px; height: 16px; border: 2px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════ SETUP WIZARD ════════════════════════════════ -->
+<div id="setup-container" class="setup-container" style="display:none">
+  <div class="setup-box">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+      <button class="btn btn-ghost btn-sm" onclick="showLoginFromSetup()" style="padding:5px 10px;font-size:12px">← Back to Login</button>
+    </div>
+    <div class="step-indicator">
+      <div class="step-dot active" id="sd1"></div>
+      <div class="step-dot" id="sd2"></div>
+      <div class="step-dot" id="sd3"></div>
+    </div>
+    <div class="step active" id="step1">
+      <h1>Activate License</h1>
+      <p class="subtitle">Enter your MotoShop license key to get started</p>
+      <div class="error-box" id="s1-err"></div>
+      <div class="form-group"><label class="form-label">License Key</label><input class="form-input" id="license-key" placeholder="VELO-XXXX-XXXX-XXXX" style="font-family:var(--font-mono)" oninput="this.value=this.value.toUpperCase()"></div>
+      <button class="btn btn-primary" onclick="validateLicense()"><i class="fa-solid fa-key"></i> Validate License →</button>
+    </div>
+    <div class="step" id="step2">
+      <h1>Shop Details</h1>
+      <p class="subtitle">Tell us about your bike shop</p>
+      <div class="error-box" id="s2-err"></div>
+      <div class="form-group"><label class="form-label">Shop Name *</label><input class="form-input" id="shop-setup-name" placeholder="e.g. City Cycle Works"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Shop Phone</label><input class="form-input" id="shop-setup-phone" placeholder="+91 98001 00000"></div>
+        <div class="form-group"><label class="form-label">Shop Email</label><input class="form-input" id="shop-setup-email" placeholder="shop@example.com"></div>
+      </div>
+      <div style="display:flex;gap:12px">
+        <button class="btn btn-ghost" onclick="goToStep(1)">← Back</button>
+        <button class="btn btn-primary" onclick="goToStep(3)">Continue →</button>
+      </div>
+    </div>
+    <div class="step" id="step3">
+      <h1>Admin Account</h1>
+      <p class="subtitle">Create your administrator login</p>
+      <div class="error-box" id="s3-err"></div>
+      <div class="form-group"><label class="form-label">Full Name *</label><input class="form-input" id="admin-name" placeholder="Your full name"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Username *</label><input class="form-input" id="admin-username" placeholder="admin" oninput="this.value=this.value.toLowerCase().replace(/\s/g,'')"></div>
+        <div class="form-group"><label class="form-label">Password *</label><input type="password" class="form-input" id="admin-password" placeholder="Min 6 chars"></div>
+      </div>
+      <div style="display:flex;gap:12px">
+        <button class="btn btn-ghost" onclick="goToStep(2)">← Back</button>
+        <button class="btn btn-primary" id="setup-btn" onclick="completeSetup()"><i class="fa-solid fa-check"></i> Complete Setup</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════ LOGIN ════════════════════════════════ -->
+<div id="login-container" class="login-container">
+  <div class="login-box">
+    <div style="text-align:center;margin-bottom:24px">
+      <div style="display:inline-flex;align-items:center;justify-content:center;width:52px;height:52px;background:var(--accent-dim);border-radius:14px;margin-bottom:12px">
+        <i class="fa-solid fa-motorcycle" style="font-size:22px;color:var(--accent)"></i>
+      </div>
+      <h1 style="font-family:var(--font-display);font-size:26px;font-weight:800;color:var(--accent);letter-spacing:-0.5px">MotoShop</h1>
+      <p style="color:var(--muted);font-size:13px;margin-top:4px">Sign in to your shop dashboard</p>
+    </div>
+    <div class="error-box" id="login-error"></div>
+    <div class="form-group">
+      <label class="form-label">Username</label>
+      <input class="form-input" id="login-username" placeholder="Enter username" autocomplete="username" onkeydown="if(event.key==='Enter') document.getElementById('login-password').focus()">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <input type="password" class="form-input" id="login-password" placeholder="Enter password" autocomplete="current-password" onkeydown="if(event.key==='Enter') doLogin()">
+    </div>
+    <button class="btn btn-primary" id="login-btn" onclick="doLogin()" style="width:100%;justify-content:center;padding:11px 0;font-size:14px;margin-top:4px">
+      <i class="fa-solid fa-right-to-bracket"></i> Login
+    </button>
+    <div style="display:flex;align-items:center;gap:12px;margin:20px 0">
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+      <span style="font-size:11px;color:var(--muted);font-family:var(--font-mono)">NEW INSTALLATION</span>
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+    </div>
+    <button class="btn btn-ghost" onclick="showSetupFromLogin()" style="width:100%;justify-content:center;border-color:var(--border2)">
+      <i class="fa-solid fa-key" style="color:var(--accent)"></i> Activate License Key
+    </button>
+    <p style="text-align:center;font-size:11px;color:var(--muted);margin-top:10px">First time? Activate your license key to set up a new shop.</p>
+  </div>
+</div>
+
+<!-- ════════════════════════════════ SIDEBAR ════════════════════════════════ -->
+<nav id="sidebar" style="display:none">
+  <div class="sidebar-logo">
+    <h1><i class="fa-solid fa-motorcycle"></i> MotoShop</h1>
+    <p id="sidebar-shop-label">Repair Management</p>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">Workspace</div>
+    <div class="nav-item active" data-page="dashboard" onclick="navigate('dashboard')"><i class="fa-solid fa-gauge-high"></i> Dashboard</div>
+    <div class="nav-item" data-page="kanban" onclick="navigate('kanban')"><i class="fa-solid fa-table-columns"></i> Kanban Board</div>
+    <div class="nav-item" data-page="jobs" onclick="navigate('jobs')"><i class="fa-solid fa-list-check"></i> All Jobs <span class="nav-badge hidden" id="overdue-badge">0</span></div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">People</div>
+    <div class="nav-item" data-page="mechanics" onclick="navigate('mechanics')"><i class="fa-solid fa-screwdriver-wrench"></i> Mechanics</div>
+    <div class="nav-item" data-page="customers" onclick="navigate('customers')"><i class="fa-solid fa-users"></i> Customers</div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-label">Tools</div>
+    <div class="nav-item" onclick="openWABridge()"><i class="fa-brands fa-whatsapp" style="color:var(--wa)"></i> WhatsApp Bridge</div>
+    <div class="nav-item" data-page="settings" onclick="navigate('settings')"><i class="fa-solid fa-gear"></i> Settings</div>
+  </div>
+  <div class="sidebar-footer">
+    <div class="shop-info">
+      <div class="shop-avatar" id="shop-avatar">VS</div>
+      <div>
+        <div class="shop-name-txt" id="shop-name-display">VeloShop</div>
+        <div class="shop-role-txt" id="user-role-display">Admin</div>
+      </div>
+    </div>
+    <div class="logout-btn" onclick="doLogout()"><i class="fa-solid fa-right-from-bracket"></i> Log Out</div>
+  </div>
+</nav>
+
+<!-- ════════════════════════════════ MAIN ════════════════════════════════ -->
+<div id="main" style="display:none">
+
+  <!-- DASHBOARD -->
+  <div class="page active" id="page-dashboard">
+    <div class="page-header">
+      <div><div class="page-title">Dashboard</div><div class="page-subtitle" id="dash-date"></div></div>
+      <button class="btn btn-primary" onclick="openJobModal()"><i class="fa-solid fa-plus"></i> New Job</button>
+    </div>
+    <div id="overdue-banner" class="overdue-banner">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      <div><strong id="overdue-count-text">0 jobs</strong> are overdue — customers waiting!</div>
+      <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="navigate('jobs')">View All</button>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-label">Open Jobs</div><div class="stat-value" id="stat-open">—</div><div class="stat-delta">active</div></div>
+      <div class="stat-card"><div class="stat-label">Overdue</div><div class="stat-value" id="stat-overdue">—</div><div class="stat-delta danger">SLA breaches</div></div>
+      <div class="stat-card"><div class="stat-label">Completed Today</div><div class="stat-value" id="stat-today">—</div><div class="stat-delta up">finished</div></div>
+      <div class="stat-card"><div class="stat-label">Est. Revenue</div><div class="stat-value" id="stat-revenue">—</div><div class="stat-delta">delivered jobs</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 300px;gap:14px">
+      <div>
+        <div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--muted);text-transform:uppercase;font-family:var(--font-mono)">Recent Jobs</div>
+        <div class="table-wrap"><table><thead><tr><th>Motorcycle</th><th>Customer</th><th>Mechanic</th><th>Status</th><th>SLA</th></tr></thead><tbody id="recent-jobs-tbody"></tbody></table></div>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:600;margin-bottom:10px;color:var(--muted);text-transform:uppercase;font-family:var(--font-mono)">Mechanic Load</div>
+        <div id="mech-load-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KANBAN -->
+  <div class="page" id="page-kanban">
+    <div class="page-header">
+      <div><div class="page-title">Kanban Board</div><div class="page-subtitle">Click a card to update status</div></div>
+      <button class="btn btn-primary" onclick="openJobModal()"><i class="fa-solid fa-plus"></i> New Job</button>
+    </div>
+    <div class="kanban-board" id="kanban-board"></div>
+  </div>
+
+  <!-- ALL JOBS -->
+  <div class="page" id="page-jobs">
+    <div class="page-header">
+      <div><div class="page-title">All Jobs</div><div class="page-subtitle">Complete job registry</div></div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <select class="form-input" style="width:160px" id="filter-status" onchange="renderJobsTable()">
+          <option value="">All Statuses</option>
+          <option value="PENDING">Pending</option>
+          <option value="IN_PROGRESS">In Progress</option>
+          <option value="READY">Ready</option>
+          <option value="DELIVERED">Delivered</option>
+        </select>
+        <button class="btn btn-primary" onclick="openJobModal()"><i class="fa-solid fa-plus"></i> New Job</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr><th>ID</th><th>Motorcycle</th><th>Type</th><th>Customer</th><th>Mechanic</th><th>Status</th><th>SLA</th><th>Created</th><th>Actions</th></tr></thead>
+      <tbody id="jobs-tbody"></tbody></table>
+    </div>
+  </div>
+
+  <!-- MECHANICS -->
+  <div class="page" id="page-mechanics">
+    <div class="page-header">
+      <div><div class="page-title">Mechanics</div><div class="page-subtitle">Team management</div></div>
+      <button class="btn btn-primary" onclick="openMechanicModal()"><i class="fa-solid fa-plus"></i> Add Mechanic</button>
+    </div>
+    <div class="mechanics-grid" id="mechanics-grid"></div>
+  </div>
+
+  <!-- CUSTOMERS -->
+  <div class="page" id="page-customers">
+    <div class="page-header">
+      <div><div class="page-title">Customers</div><div class="page-subtitle">Client directory</div></div>
+    </div>
+    <div class="customer-search">
+      <div class="search-input-wrap">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" class="form-input search-input" id="customer-search" placeholder="Search by name or phone…" oninput="renderCustomers()">
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table><thead><tr><th>Name</th><th>Phone</th><th>Total Jobs</th><th>Last Job</th><th>Customer Since</th></tr></thead>
+      <tbody id="customers-tbody"></tbody></table>
+    </div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="page" id="page-settings">
+    <div class="page-header">
+      <div><div class="page-title">Settings</div><div class="page-subtitle">Database, integrations & shop configuration</div></div>
+      <button class="btn btn-primary" onclick="saveAllSettings()"><i class="fa-solid fa-floppy-disk"></i> Save Settings</button>
+    </div>
+
+    <div class="settings-grid">
+
+      <!-- SUPABASE CONFIG -->
+      <div class="settings-section" style="grid-column:1/-1">
+        <div style="display:flex;align-items:center;margin-bottom:4px">
+          <div class="settings-section-title"><i class="fa-solid fa-database" style="color:var(--green)"></i> Supabase Database</div>
+          <span class="settings-status disconnected" id="db-status-badge"><i class="fa-solid fa-circle"></i> Not configured</span>
+        </div>
+        <div class="settings-section-desc">Connect to Supabase for persistent cloud storage. Without it, all data resets on server restart.</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Supabase Project URL</label>
+            <input class="form-input" id="cfg-supabase-url" placeholder="https://abcdefgh.supabase.co" oninput="markDbUnsaved()">
+            <div style="font-size:11px;color:var(--muted);margin-top:4px">Find in: Supabase Dashboard → Project Settings → API → Project URL</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Supabase Anon (public) Key</label>
+            <div style="position:relative">
+              <input class="form-input" id="cfg-supabase-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." type="password" oninput="markDbUnsaved()" style="padding-right:40px">
+              <span onclick="toggleShowKey()" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--muted)"><i class="fa-solid fa-eye" id="eye-icon"></i></span>
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:4px">Find in: Project Settings → API → anon / public key</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button class="btn btn-ghost" onclick="testSupabaseConnection()"><i class="fa-solid fa-plug"></i> Test Connection</button>
+          <button class="btn btn-primary btn-sm" onclick="saveAllSettings()"><i class="fa-solid fa-floppy-disk"></i> Save & Connect</button>
+          <span id="db-test-result" style="font-size:12px;color:var(--muted)"></span>
+        </div>
+        <div class="env-hint" style="margin-top:14px">
+          <strong>📋 Setup steps:</strong><br>
+          1. Create free project at <a href="https://supabase.com" target="_blank" style="color:var(--accent)">supabase.com</a><br>
+          2. Go to SQL Editor → paste the schema from <code style="color:var(--accent)">http://localhost:3002/api/schema</code><br>
+          3. Paste your Project URL and anon key above → click <strong>Save &amp; Connect</strong><br>
+          <br>
+          <strong>⚡ Or use env vars (production):</strong><br>
+          SUPABASE_URL=https://xxxx.supabase.co &nbsp; SUPABASE_KEY=eyJhbGci...
+        </div>
+      </div>
+
+      <!-- WHATSAPP BRIDGE -->
+      <div class="settings-section">
+        <div style="display:flex;align-items:center;margin-bottom:4px">
+          <div class="settings-section-title"><i class="fa-brands fa-whatsapp" style="color:var(--wa)"></i> WhatsApp Bridge</div>
+          <span class="settings-status pending" id="wa-status-badge"><i class="fa-solid fa-circle"></i> wa.me links</span>
+        </div>
+        <div class="settings-section-desc">Choose how WhatsApp messages are sent to customers.</div>
+        <div class="wa-bridge-tabs">
+          <button class="wa-tab active" id="wa-tab-link" onclick="setWAMode('link')"><i class="fa-solid fa-link"></i> wa.me Links</button>
+          <button class="wa-tab" id="wa-tab-bridge" onclick="setWAMode('bridge')"><i class="fa-solid fa-server"></i> Local Bridge</button>
+        </div>
+        <div id="wa-link-config">
+          <div style="background:var(--green-dim);border-radius:var(--radius);padding:12px 14px;font-size:12px;color:var(--green)">
+            <i class="fa-solid fa-check-circle"></i> Active — clicking "Send WhatsApp" opens wa.me in a new tab. No setup needed.
+          </div>
+        </div>
+        <div id="wa-bridge-config" style="display:none">
+          <div class="form-group"><label class="form-label">Bridge API URL</label><input class="form-input" id="cfg-wa-url" placeholder="http://localhost:3003/api/send"></div>
+          <div class="form-group"><label class="form-label">Bridge API Key (optional)</label><input class="form-input" id="cfg-wa-key" placeholder="Leave blank if not set" type="password"></div>
+          <div style="display:flex;gap:8px;margin-bottom:14px">
+            <button class="btn btn-ghost btn-sm" onclick="testWABridge()"><i class="fa-solid fa-wifi"></i> Check Bridge</button>
+            <button class="btn btn-ghost btn-sm" onclick="refreshQR()"><i class="fa-solid fa-qrcode"></i> Refresh QR</button>
+            <span id="wa-test-result" style="font-size:12px;color:var(--muted);align-self:center;margin-left:4px"></span>
+          </div>
+
+          <!-- QR CODE PANEL -->
+          <div id="qr-panel" style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px">
+            <div style="font-size:12px;color:var(--muted);font-family:var(--font-mono);margin-bottom:10px;display:flex;align-items:center;justify-content:space-between">
+              <span>WHATSAPP CONNECTION</span>
+              <span id="wa-conn-status" style="color:var(--orange)">● Disconnected</span>
+            </div>
+            <div id="qr-display" style="display:flex;align-items:center;justify-content:center;min-height:180px">
+              <div style="text-align:center;color:var(--muted)">
+                <i class="fa-solid fa-qrcode" style="font-size:32px;margin-bottom:10px;display:block;opacity:0.3"></i>
+                <div style="font-size:12px">Click "Refresh QR" to load the QR code<br>Make sure wa-bridge.js is running on port 3003</div>
+              </div>
+            </div>
+            <div id="qr-instructions" style="font-size:11px;color:var(--muted);margin-top:10px;display:none">
+              1. Open WhatsApp on your phone<br>
+              2. Tap Menu → Linked Devices → Link a Device<br>
+              3. Scan the QR code above
+            </div>
+          </div>
+
+          <div class="env-hint">
+            <strong>🚀 Start the bridge:</strong><br>
+            <code style="color:var(--accent)">node wa-bridge.js</code><br><br>
+            <strong>📦 Install first:</strong><br>
+            <code style="color:var(--accent)">npm install whatsapp-web.js qrcode express cors</code>
+          </div>
+
+          <!-- AUTO-SEND TOGGLE -->
+          <div class="form-group" style="margin-top:14px;padding:14px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius)">
+            <label class="form-label" style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:0">
+              <input type="checkbox" id="cfg-silent-wa" style="width:16px;height:16px;accent-color:var(--wa)">
+              <span style="font-weight:600">Auto-send WhatsApp (Silent Mode)</span>
+            </label>
+            <div style="font-size:11px;color:var(--muted);margin-top:6px;padding-left:26px">
+              <strong style="color:var(--orange)">OFF (default):</strong> A review popup appears before each message — you can edit it first.<br>
+              <strong style="color:var(--wa)">ON:</strong> Messages send instantly via the bridge after every job save or status change, no popup.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SHOP SETTINGS -->
+      <div class="settings-section">
+        <div class="settings-section-title"><i class="fa-solid fa-store" style="color:var(--blue)"></i> Shop Information</div>
+        <div class="settings-section-desc">Your shop's basic details shown across the app.</div>
+        <div class="form-group"><label class="form-label">Shop Name</label><input class="form-input" id="cfg-shop-name" placeholder="MotoShop"></div>
+        <div class="form-group"><label class="form-label">Shop Phone</label><input class="form-input" id="cfg-shop-phone" placeholder="+91 98000 00000"></div>
+        <div class="form-group"><label class="form-label">Shop Email</label><input class="form-input" id="cfg-shop-email" placeholder="shop@example.com"></div>
+        <div class="form-group"><label class="form-label">Currency Symbol</label>
+          <select class="form-input" id="cfg-currency">
+            <option value="₹">₹ Indian Rupee</option>
+            <option value="$">$ US Dollar</option>
+            <option value="€">€ Euro</option>
+            <option value="£">£ British Pound</option>
+          </select>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<!-- ════════════════════ JOB MODAL ════════════════════ -->
+<div class="modal-overlay" id="job-modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="job-modal-title">New Job</div>
+      <button class="btn btn-ghost btn-icon btn-sm" onclick="closeJobModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="job-edit-id">
+      <div class="form-group"><label class="form-label">Motorcycle / Vehicle *</label><input class="form-input" id="job-bike" placeholder="e.g. Royal Enfield Classic 350"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Customer Name *</label><input class="form-input" id="job-cust-name" placeholder="Full name" list="cust-autocomplete"></div>
+        <div class="form-group"><label class="form-label">Customer Phone</label><input class="form-input" id="job-cust-phone" placeholder="+91 98000 00000"></div>
+      </div>
+      <datalist id="cust-autocomplete"></datalist>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Job Type</label>
+          <select class="form-input" id="job-type" onchange="autoSLA(this.value)">
+            <option value="Repair">Repair (24h SLA)</option>
+            <option value="Service">Service (48h SLA)</option>
+            <option value="Custom">Custom Build (72h SLA)</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Assign Mechanic</label>
+          <select class="form-input" id="job-mechanic"></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Service Checklist</label>
+        <div id="checklist-wrap" style="background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 12px;min-height:80px">
+          <div id="checklist-items" style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px"></div>
+          <div style="display:flex;gap:8px">
+            <input class="form-input" id="checklist-new-item" placeholder="Add a task (e.g. Replace brake pads)…" style="flex:1;padding:7px 11px;font-size:12px" onkeydown="if(event.key==='Enter'){event.preventDefault();addChecklistItem();}">
+            <button type="button" class="btn btn-ghost btn-sm" onclick="addChecklistItem()" style="flex-shrink:0"><i class="fa-solid fa-plus"></i></button>
+          </div>
+        </div>
+        <input type="hidden" id="job-issue">
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Status</label>
+          <select class="form-input" id="job-status">
+            <option value="PENDING">Pending</option><option value="IN_PROGRESS">In Progress</option><option value="READY">Ready for Pickup</option><option value="DELIVERED">Delivered</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Estimated Completion</label>
+          <input class="form-input" id="job-est-date" type="datetime-local" oninput="syncSLAFromDate()">
+          <div style="font-size:11px;color:var(--muted);margin-top:4px;font-family:var(--font-mono)" id="job-sla-hint"></div>
+          <input type="hidden" id="job-sla" value="24">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeJobModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveJob()"><i class="fa-solid fa-floppy-disk"></i> Save Job</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ MECHANIC MODAL ════════════════════ -->
+<div class="modal-overlay" id="mech-modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="mech-modal-title">Add Mechanic</div>
+      <button class="btn btn-ghost btn-icon btn-sm" onclick="closeMechanicModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="mech-edit-id">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Name *</label><input class="form-input" id="mech-name" placeholder="Full name"></div>
+        <div class="form-group"><label class="form-label">Phone</label><input class="form-input" id="mech-phone" placeholder="+91 99000 00000"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Specialization</label>
+        <select class="form-input" id="mech-spec">
+          <option>General Repairs</option><option>Engine Overhaul</option><option>Electrical &amp; Wiring</option><option>Suspension &amp; Brakes</option><option>Tyres &amp; Wheels</option><option>Custom Builds</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeMechanicModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveMechanic()"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ DETAIL MODAL ════════════════════ -->
+<div class="modal-overlay" id="detail-modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="detail-bike"></div>
+        <div style="font-size:12px;color:var(--muted)" id="detail-id"></div>
+      </div>
+      <button class="btn btn-ghost btn-icon btn-sm" onclick="closeDetailModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <div id="detail-content"></div>
+      <div class="divider"></div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px;font-family:var(--font-mono)">UPDATE STATUS</div>
+      <div id="status-buttons" style="display:flex;gap:8px;flex-wrap:wrap"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" onclick="deleteJobFromDetail()"><i class="fa-solid fa-trash"></i> Delete</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-wa" onclick="sendWAFromDetail()"><i class="fa-brands fa-whatsapp"></i> WhatsApp</button>
+        <button class="btn btn-ghost" onclick="closeDetailModal()">Close</button>
+        <button class="btn btn-primary" onclick="editJobFromDetail()"><i class="fa-solid fa-pen"></i> Edit</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════ WHATSAPP BRIDGE MODAL ════════════════════ -->
+<div id="wa-modal-overlay">
+  <div id="wa-modal">
+    <div class="wa-modal-header">
+      <div class="wa-modal-title"><i class="fa-brands fa-whatsapp"></i> WhatsApp Notifications</div>
+      <button class="btn btn-ghost btn-icon btn-sm" onclick="closeWAModal()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="wa-modal-body">
+      <div class="wa-progress" id="wa-progress">Step 1 of 2</div>
+      <div id="wa-recipient-tabs" style="display:flex;gap:8px;margin-bottom:14px">
+        <div id="wa-tab-cust" class="wa-recip-tab active"><i class="fa-solid fa-user"></i> Customer</div>
+        <div id="wa-tab-mech" class="wa-recip-tab"><i class="fa-solid fa-screwdriver-wrench"></i> Mechanic</div>
+      </div>
+      <div class="wa-job-info" id="wa-job-info">
+        <strong id="wa-job-bike">—</strong>
+        <span id="wa-job-status-line">—</span>
+      </div>
+      <div class="wa-customer-line">
+        <i class="fa-solid fa-user" style="color:var(--muted)" id="wa-recip-icon"></i>
+        <strong id="wa-cust-name">Customer</strong>
+        <span id="wa-cust-phone" style="font-family:var(--font-mono);font-size:11px;color:var(--muted)"></span>
+        <span id="wa-no-phone-warn" style="font-size:11px;color:var(--orange);display:none"><i class="fa-solid fa-triangle-exclamation"></i> No phone — cannot send</span>
+      </div>
+      <textarea class="wa-message-box" id="wa-message" rows="5"></textarea>
+    </div>
+    <div class="wa-modal-footer">
+      <span class="wa-skip-link" onclick="waSkip()">Skip this recipient</span>
+      <div class="wa-actions">
+        <button class="btn btn-ghost btn-sm" onclick="closeWAModal()">Close</button>
+        <button class="btn btn-wa" id="wa-send-btn" onclick="waSend()"><i class="fa-brands fa-whatsapp"></i> Send via WhatsApp</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast"><i class="fa-solid fa-check-circle"></i> <span id="toast-msg"></span></div>
+
+<!-- ════════════════════════════════ SCRIPT ════════════════════════════════ -->
+<script>
+// ── CONFIG ───────────────────────────────────────────────────────────────────
+const CENTRAL_API = 'http://localhost:3001/api';
+const CLIENT_API  = 'http://localhost:3002/api';
+
+// ── STATE ────────────────────────────────────────────────────────────────────
+let authToken   = sessionStorage.getItem('moto_token');
+let currentUser = null;
+let allJobs = [], allMechanics = [], allCustomers = [];
+let setupLicenseData = null;
+let currentStep = 1;
+let currentDetailJobId = null;
+let waQueue = [], waIndex = 0;
+let _configCache = null;
+
+// ── CONFIG HELPERS ───────────────────────────────────────────────────────────
+/**
+ * Fetch config from the server and cache it.
+ * The server (shop.config column) is the single source of truth.
+ */
+async function syncConfigFromServer() {
+  if (!authToken) return null;
+  try {
+    const headers = {};
+    if (authToken && authToken !== 'cookie-auth') headers['Authorization'] = `Bearer ${authToken}`;
+    const res = await fetch(`${CLIENT_API}/shop/config`, { credentials: 'include', headers });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const cfg = await res.json();
+    sessionStorage.setItem('moto_cfg', JSON.stringify(cfg));
+    _configCache = cfg;
+    return cfg;
+  } catch (e) {
+    console.warn('Config fetch failed:', e.message);
+    try {
+      const cached = sessionStorage.getItem('moto_cfg');
+      if (cached) { _configCache = JSON.parse(cached); return _configCache; }
+    } catch {}
+    return null;
+  }
+}
+
+async function loadConfig() {
+  if (_configCache) return _configCache;
+  try {
+    const cached = sessionStorage.getItem('moto_cfg');
+    if (cached) { _configCache = JSON.parse(cached); return _configCache; }
+  } catch {}
+  return await syncConfigFromServer();
+}
+
+/**
+ * Merge a patch into the current config and save to the server.
+ * The server's PUT /api/shop/config handler also activates Supabase
+ * credentials and persists them to disk — no extra /api/config call needed.
+ */
+async function saveConfig(patch) {
+  if (!authToken) return null;
+  const current   = (await loadConfig()) || {};
+  const newConfig = { ...current, ...patch };
+
+  const hdrs = { 'Content-Type': 'application/json' };
+  if (authToken && authToken !== 'cookie-auth') hdrs['Authorization'] = `Bearer ${authToken}`;
+
+  const res = await fetch(`${CLIENT_API}/shop/config`, {
+    method: 'PUT', headers: hdrs, credentials: 'include',
+    body: JSON.stringify(newConfig)
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+
+  _configCache = newConfig;
+  sessionStorage.setItem('moto_cfg', JSON.stringify(newConfig));
+  return newConfig;
+}
+
+// ── BOOT ─────────────────────────────────────────────────────────────────────
+async function boot() {
+  const savedToken = sessionStorage.getItem('moto_token');
+  const savedUser  = sessionStorage.getItem('user');
+
+  if (savedToken && savedUser) {
+    authToken   = savedToken;
+    currentUser = JSON.parse(savedUser);
+    try {
+      const res = await fetch(`${CLIENT_API}/auth/me`, {
+        credentials: 'include',
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        currentUser = data.user;
+        sessionStorage.setItem('user', JSON.stringify(data.user));
+        await syncConfigFromServer().catch(() => {});
+        await loadData();
+        showApp();
+        navigate('dashboard');
+        return;
+      }
+      sessionStorage.clear();
+      authToken = null; currentUser = null;
+    } catch (e) {
+      console.warn('Auth check failed:', e.message);
+      await loadData().catch(() => {});
+      showApp();
+      navigate('dashboard');
+      return;
+    }
+  }
+
+  try {
+    const res = await fetch(`${CLIENT_API}/auth/me`, { credentials: 'include' });
+    if (res.ok) {
+      const data = await res.json();
+      currentUser = data.user;
+      authToken = 'cookie-auth';
+      sessionStorage.setItem('user', JSON.stringify(data.user));
+      await syncConfigFromServer().catch(() => {});
+      await loadData();
+      showApp();
+      navigate('dashboard');
+      return;
+    }
+  } catch (e) {}
+  // No valid session — stay on login screen
+}
+
+function showSetupFromLogin() {
+  document.getElementById('login-container').style.display = 'none';
+  document.getElementById('setup-container').style.display = 'flex';
+  goToStep(1);
+}
+function showLoginFromSetup() {
+  document.getElementById('setup-container').style.display = 'none';
+  document.getElementById('login-container').style.display = 'flex';
+}
+
+function showApp() {
+  document.getElementById('setup-container').style.display = 'none';
+  document.getElementById('login-container').style.display = 'none';
+  document.getElementById('sidebar').style.display = 'flex';
+  document.getElementById('main').style.display = 'block';
+  document.getElementById('shop-name-display').textContent = currentUser?.shop?.name || 'MotoShop';
+  document.getElementById('user-role-display').textContent = currentUser?.role || 'Staff';
+  document.getElementById('sidebar-shop-label').textContent = currentUser?.shop?.name || 'Repair Management';
+  document.getElementById('shop-avatar').textContent = (currentUser?.shop?.name || 'MS').slice(0,2).toUpperCase();
+  startDeadlineChecker();
+  checkDBModeAndWarn();
+}
+
+/**
+ * Ask the server whether Supabase is active (not the cached config).
+ * This is the only reliable signal because the server may have activated
+ * creds from the creds file on startup.
+ */
+async function checkDBModeAndWarn() {
+  try {
+    const res = await fetch(`${CLIENT_API}/config`);
+    if (res.ok) {
+      const { hasSupabase } = await res.json();
+      if (!hasSupabase) showMemoryModeWarning();
+    }
+  } catch {}
+}
+
+function showMemoryModeWarning() {
+  if (document.getElementById('memory-mode-banner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'memory-mode-banner';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#b45309;color:#fff;padding:10px 20px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,0.3)';
+  banner.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i>
+    <span>⚠️ Running in <b>In-Memory mode</b> — all data will be lost on server restart. Go to
+    <a href="#" onclick="navigate('settings');document.getElementById('memory-mode-banner').remove();return false;"
+       style="color:#fde68a;text-decoration:underline">Settings → Database</a> to configure Supabase.</span>
+    <button onclick="this.parentElement.remove()" style="margin-left:auto;background:none;border:1px solid rgba(255,255,255,0.5);color:#fff;border-radius:4px;padding:2px 10px;cursor:pointer;font-size:12px">Dismiss</button>`;
+  document.body.prepend(banner);
+}
+
+// ── SETUP WIZARD ─────────────────────────────────────────────────────────────
+function goToStep(step) {
+  currentStep = step;
+  document.querySelectorAll('.step').forEach((s, i) => s.classList.toggle('active', i + 1 === step));
+  ['sd1','sd2','sd3'].forEach((id, i) => {
+    const dot = document.getElementById(id);
+    dot.classList.toggle('active', i + 1 === step);
+    dot.classList.toggle('done', i + 1 < step);
+  });
+}
+
+async function validateLicense() {
+  const key    = document.getElementById('license-key').value.trim().toUpperCase();
+  const errDiv = document.getElementById('s1-err');
+  if (!key) { showErr(errDiv, 'Please enter your license key'); return; }
+  errDiv.style.display = 'none';
+  try {
+    const res  = await fetch(`${CENTRAL_API}/validate-license`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ licenseKey: key }) });
+    const data = await res.json();
+    if (!res.ok || !data.valid) throw new Error(data.error || 'Invalid license key');
+    setupLicenseData = data.license;
+    goToStep(2);
+  } catch (err) { showErr(errDiv, err.message); }
+}
+
+async function completeSetup() {
+  const shopName  = document.getElementById('shop-setup-name').value.trim();
+  const shopPhone = document.getElementById('shop-setup-phone').value.trim();
+  const shopEmail = document.getElementById('shop-setup-email').value.trim();
+  const adminName = document.getElementById('admin-name').value.trim();
+  const adminUser = document.getElementById('admin-username').value.trim();
+  const adminPass = document.getElementById('admin-password').value;
+  const errDiv    = document.getElementById('s3-err');
+  if (!shopName || !adminName || !adminUser || !adminPass) { showErr(errDiv, 'Please fill all required fields'); return; }
+  if (adminPass.length < 6) { showErr(errDiv, 'Password must be at least 6 characters'); return; }
+  errDiv.style.display = 'none';
+  const btn = document.getElementById('setup-btn');
+  btn.innerHTML = '<span class="spinner"></span> Setting up…'; btn.disabled = true;
+  try {
+    const res  = await fetch(`${CLIENT_API}/setup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ licenseKey: setupLicenseData?.license_key || 'LOCAL', shopName, shopPhone, shopEmail, adminName, adminUsername: adminUser, adminPassword: adminPass, centralServerUrl: CENTRAL_API.replace('/api', '') }) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    document.getElementById('setup-container').style.display = 'none';
+    document.getElementById('login-container').style.display = 'flex';
+    toast('Shop setup complete! Please log in.');
+  } catch (err) { showErr(errDiv, err.message); }
+  finally { btn.innerHTML = '<i class="fa-solid fa-check"></i> Complete Setup'; btn.disabled = false; }
+}
+
+// ── LOGIN ─────────────────────────────────────────────────────────────────────
+async function doLogin() {
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errDiv   = document.getElementById('login-error');
+  if (!username || !password) { showErr(errDiv, 'Enter username and password'); return; }
+  errDiv.style.display = 'none';
+  const btn = document.getElementById('login-btn');
+  btn.innerHTML = '<span class="spinner"></span> Logging in…'; btn.disabled = true;
+  try {
+    const res  = await fetch(`${CLIENT_API}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ username, password }) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Login failed');
+
+    currentUser = data.user;
+    authToken   = data.token || 'cookie-auth';
+    sessionStorage.setItem('user', JSON.stringify(data.user));
+    sessionStorage.setItem('moto_token', authToken);
+
+    btn.innerHTML = '<span class="spinner"></span> Loading…';
+    await syncConfigFromServer().catch(() => {});
+    await loadData();
+    showApp();
+    navigate('dashboard');
+  } catch (err) {
+    currentUser = null; authToken = null;
+    sessionStorage.removeItem('moto_token');
+    sessionStorage.removeItem('user');
+    showErr(errDiv, err.message);
+  } finally {
+    btn.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> Login';
+    btn.disabled = false;
+  }
+}
+
+async function doLogout() {
+  if (!confirm('Log out of MotoShop?')) return;
+  try {
+    const headers = {};
+    if (authToken && authToken !== 'cookie-auth') headers['Authorization'] = `Bearer ${authToken}`;
+    await fetch(`${CLIENT_API}/auth/logout`, { method: 'POST', credentials: 'include', headers });
+  } catch (e) {}
+  sessionStorage.clear();
+  _configCache = null; authToken = null; currentUser = null;
+  location.reload();
+}
+
+// ── API ───────────────────────────────────────────────────────────────────────
+async function apiCall(endpoint, opts = {}) {
+  const headers = { 'Content-Type': 'application/json', ...opts.headers };
+  if (authToken && authToken !== 'cookie-auth') headers['Authorization'] = `Bearer ${authToken}`;
+  const res = await fetch(`${CLIENT_API}${endpoint}`, { ...opts, credentials: 'include', headers });
+  if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `Request failed (${res.status})`); }
+  return res.json();
+}
+
+async function loadData() {
+  const safe = fn => fn.catch(e => { console.warn('loadData partial fail:', e.message); return []; });
+  [allJobs, allMechanics, allCustomers] = await Promise.all([
+    safe(apiCall('/jobs')), safe(apiCall('/mechanics')), safe(apiCall('/customers'))
+  ]);
+  updateOverdueBadge();
+  updateCustomerAutocomplete();
+  if (authToken) checkDeadlines();
+}
+
+// ── WHATSAPP AUTO-NOTIFY ──────────────────────────────────────────────────────
+/**
+ * Send WA notifications after a job is saved/updated.
+ * Behaviour depends on the silentWhatsApp setting:
+ *   - silentWhatsApp=true + bridge configured → sends silently via bridge
+ *   - silentWhatsApp=true + wa.me mode → opens browser tabs (best effort)
+ *   - silentWhatsApp=false (default) → shows the review modal
+ */
+async function autoNotifyJob(job, eventType) {
+  if (!job) return;
+  const cfg  = (await loadConfig()) || {};
+  const cust = allCustomers.find(c => c.id === job.cust_id);
+  const mech = allMechanics.find(m => m.id === job.mech_id);
+  const shop = currentUser?.shop?.name || 'MotoShop';
+
+  const messages = [];
+  if (cust?.phone) messages.push({ phone: cust.phone, message: generateCustMessage(job, eventType, cust, shop), name: cust.name, type: 'customer' });
+  if (mech?.phone) messages.push({ phone: mech.phone, message: generateMechMessage(job, eventType, mech, cust, shop), name: mech.name, type: 'mechanic' });
+  if (messages.length === 0) return;
+
+  // ── FIX: actually check the silentWhatsApp flag ───────────────────────────
+  const isSilent = cfg.silentWhatsApp === true && cfg.waMode === 'bridge' && cfg.waUrl;
+
+  if (isSilent) {
+    // Bridge is configured and silent mode is ON — send automatically
+    const ok = await silentSendWA(messages, cfg);
+    if (ok) {
+      const names = messages.map(m => m.name).join(' & ');
+      toast(`WhatsApp sent to ${names} ✓`, 'success');
+    }
+  } else {
+    // Default: show the review popup so the user can check before sending
+    openWABridgeForJobs([job], eventType);
+  }
+}
+
+async function silentSendWA(messages, cfg) {
+  if (!cfg) cfg = (await loadConfig()) || {};
+  const valid = messages.filter(m => (m.phone || '').replace(/\D/g,'').length >= 7 && m.message);
+  if (valid.length === 0) return false;
+
+  if (cfg.waMode === 'bridge' && cfg.waUrl) {
+    const baseUrl  = cfg.waUrl.replace(/\/api\/send.*$/, '');
+    const bulkUrl  = `${baseUrl}/api/send-bulk`;
+    const headers  = { 'Content-Type': 'application/json' };
+    if (cfg.waKey) headers['Authorization'] = `Bearer ${cfg.waKey}`;
+    try {
+      const res  = await fetch(bulkUrl, { method: 'POST', headers, body: JSON.stringify({ messages: valid.map(m => ({ phone: m.phone.replace(/\D/g,''), message: m.message })) }) });
+      if (!res.ok) throw new Error(`Bridge responded ${res.status}`);
+      const data = await res.json();
+      return (data.results?.filter(r => r.success).length || 0) > 0;
+    } catch (err) {
+      console.error('Silent WA bridge error:', err.message);
+      toast(`WhatsApp bridge error: ${err.message}`, 'error');
+      return false;
+    }
+  }
+
+  // wa.me fallback — open browser tabs
+  for (const m of valid) {
+    window.open(`https://wa.me/${m.phone.replace(/\D/g,'')}?text=${encodeURIComponent(m.message)}`, '_blank');
+    await new Promise(r => setTimeout(r, 500));
+  }
+  return true;
+}
+
+// ── MESSAGE TEMPLATES ─────────────────────────────────────────────────────────
+function generateCustMessage(job, eventType, cust, shop) {
+  const T = {
+    NEW:         (j,c,s) => `Hi ${c?.name||'there'} 👋\n\nYour *${j.bike}* has been booked in at *${s}*.\n📋 Job ID: *${j.id}*\n🔧 Type: ${j.type}\n⏱ ETA: ${j.sla_hours}h\n\nWe'll keep you posted!`,
+    UPDATE:      (j,c,s) => `Hi ${c?.name||'there'} 🔔\n\nYour job for *${j.bike}* at *${s}* has been updated.\n📋 Job ID: *${j.id}*\n🔧 Status: *${statusLabel(j.status)}*\n\nContact us if you have any questions.`,
+    PENDING:     (j,c,s) => `Hi ${c?.name||'there'} 👋\n\nWe've received your *${j.bike}* at *${s}*.\n📋 Job ID: *${j.id}*\n🔧 Type: ${j.type} · SLA: ${j.sla_hours}h\n\nWe'll keep you posted!`,
+    IN_PROGRESS: (j,c,s) => `Hi ${c?.name||'there'} 🔧\n\nYour *${j.bike}* is now *in progress* at *${s}*.\n\nWe'll notify you when it's ready.`,
+    READY:       (j,c,s) => `Hi ${c?.name||'there'} ✅\n\nYour *${j.bike}* is *ready for pickup!* 🏍️\n\nPlease visit *${s}* at your convenience.\n\nThank you!`,
+    DELIVERED:   (j,c,s) => `Hi ${c?.name||'there'} 🙏\n\nThank you for picking up your *${j.bike}* from *${s}*.\n\nRide safe! 🏍️`
+  };
+  return (T[eventType] || T.UPDATE)(job, cust, shop);
+}
+
+function generateMechMessage(job, eventType, mech, cust, shop) {
+  const due = jobDueDate(job).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' });
+  const T = {
+    NEW:         (j,m,c,s) => `Hi ${m?.name||'there'} 🔧\n\nNew job assigned at *${s}*.\n\n📋 *${j.id}* · ${j.bike}\n👤 ${c?.name||'—'} ${c?.phone?`(${c.phone})`:''}\n🔧 ${j.type}\n📅 Due: ${due}\n\nPlease begin ASAP!`,
+    UPDATE:      (j,m,c,s) => `Hi ${m?.name||'there'} 📝\n\nJob *${j.id}* updated at *${s}*.\n\n🏍 ${j.bike} · 👤 ${c?.name||'—'}\n🔧 ${j.type} · Status: *${statusLabel(j.status)}*\n📅 Due: ${due}`,
+    PENDING:     (j,m,c,s) => `Hi ${m?.name||'there'} 🔧\n\nJob *${j.id}* (${j.bike}) is *Pending* at *${s}*.\n\n👤 ${c?.name||'—'} ${c?.phone?`(${c.phone})`:''}\n📅 Due: ${due}`,
+    IN_PROGRESS: (j,m,c,s) => `Hi ${m?.name||'there'} 🔧\n\nJob *${j.id}* (${j.bike}) is *In Progress* at *${s}*.\n\n👤 ${c?.name||'—'}\n📅 Due: ${due}\n\nKeep it up!`,
+    READY:       (j,m,c,s) => `Hi ${m?.name||'there'} ✅\n\nJob *${j.id}* for *${j.bike}* is *READY for pickup*.\n\n👤 ${c?.name||'—'} · 📞 ${c?.phone||'N/A'}\n\nPlease coordinate delivery.`,
+    DELIVERED:   (j,m,c,s) => `Hi ${m?.name||'there'} 🙏\n\nJob *${j.id}* (${j.bike}) marked *Delivered* at *${s}*.\n\nGreat work!`
+  };
+  return (T[eventType] || T.UPDATE)(job, mech, cust, shop);
+}
+
+// ── NAVIGATION ────────────────────────────────────────────────────────────────
+function navigate(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item[data-page]').forEach(n => n.classList.remove('active'));
+  document.getElementById(`page-${page}`)?.classList.add('active');
+  document.querySelector(`[data-page="${page}"]`)?.classList.add('active');
+  if (page === 'dashboard')  renderDashboard();
+  else if (page === 'kanban')    renderKanban();
+  else if (page === 'jobs')      renderJobsTable();
+  else if (page === 'mechanics') renderMechanics();
+  else if (page === 'customers') renderCustomers();
+  else if (page === 'settings')  { syncConfigFromServer().then(() => renderSettings()); }
+}
+
+function refreshCurrentPage() {
+  const active = document.querySelector('.page.active');
+  if (active) navigate(active.id.replace('page-', ''));
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function getMech(id)     { return allMechanics.find(m => m.id === id); }
+function getCust(id)     { return allCustomers.find(c => c.id === id); }
+function getMechLoad(id) { return allJobs.filter(j => j.mech_id === id && j.status !== 'DELIVERED').length; }
+function isOverdue(job)  { return job.status !== 'DELIVERED' && Date.now() > new Date(job.created_at).getTime() + job.sla_hours * 3600000; }
+function hoursLeft(job)  {
+  const diff = (new Date(job.created_at).getTime() + job.sla_hours * 3600000) - Date.now();
+  return diff < 0 ? `${Math.abs(Math.round(diff/3600000))}h overdue` : `${Math.round(diff/3600000)}h left`;
+}
+function statusLabel(s)  { return { PENDING:'Pending', IN_PROGRESS:'In Progress', READY:'Ready', DELIVERED:'Delivered' }[s] || s; }
+function statusPill(s)   { return `<span class="status-pill status-${s}">${statusLabel(s)}</span>`; }
+function typeBadge(t)    { const cls = { Repair:'badge-repair', Service:'badge-service', Custom:'badge-custom' }[t]||'badge-repair'; return `<span class="job-type-badge ${cls}">${t}</span>`; }
+function jobDueDate(job) { return new Date(new Date(job.created_at).getTime() + job.sla_hours * 3600000); }
+
+function updateOverdueBadge() {
+  const n = allJobs.filter(j => isOverdue(j)).length;
+  const badge = document.getElementById('overdue-badge');
+  if (n > 0) { badge.textContent = n; badge.classList.remove('hidden'); } else badge.classList.add('hidden');
+}
+function updateCustomerAutocomplete() {
+  const dl = document.getElementById('cust-autocomplete');
+  if (dl) dl.innerHTML = allCustomers.map(c => `<option value="${c.name}">`).join('');
+}
+
+// ── SLA HELPERS ───────────────────────────────────────────────────────────────
+const SLA_DEFAULTS = { Repair: 24, Service: 48, Custom: 72 };
+
+function autoSLA(type) { setEstDateFromHours(SLA_DEFAULTS[type] || 24); }
+
+function setEstDateFromHours(hours) {
+  const due = new Date(Date.now() + hours * 3600000);
+  document.getElementById('job-est-date').value = toDatetimeLocal(due);
+  document.getElementById('job-sla').value = hours;
+  updateSLAHint(due);
+}
+
+function syncSLAFromDate() {
+  const val = document.getElementById('job-est-date').value;
+  if (!val) return;
+  const due  = new Date(val);
+  const diff = Math.max(1, Math.round((due - Date.now()) / 3600000));
+  document.getElementById('job-sla').value = diff;
+  updateSLAHint(due);
+}
+
+function updateSLAHint(due) {
+  const hint = document.getElementById('job-sla-hint');
+  if (!hint) return;
+  const diff = due - Date.now();
+  if (diff <= 0) { hint.textContent = '⚠ Due date is in the past'; hint.style.color = 'var(--red)'; }
+  else { hint.textContent = `≈ ${Math.round(diff/3600000)}h from now · Due: ${due.toLocaleString('en-IN', { dateStyle:'medium', timeStyle:'short' })}`; hint.style.color = 'var(--muted)'; }
+}
+
+function toDatetimeLocal(d) {
+  const p = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function showErr(el, msg) { el.textContent = msg; el.style.display = 'block'; }
+
+function toast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  const icons = { success:'fa-check-circle', error:'fa-circle-xmark', info:'fa-circle-info' };
+  t.querySelector('i').className = `fa-solid ${icons[type] || icons.success}`;
+  t.className = `${type} show`;
+  document.getElementById('toast-msg').textContent = msg;
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────────────────────────
+async function renderDashboard() {
+  document.getElementById('dash-date').textContent = new Date().toLocaleDateString('en-IN', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  try {
+    const stats = await apiCall('/dashboard/stats');
+    document.getElementById('stat-open').textContent    = stats.openJobs ?? 0;
+    document.getElementById('stat-overdue').textContent = stats.overdueJobs ?? 0;
+    document.getElementById('stat-today').textContent   = stats.completedToday ?? 0;
+    document.getElementById('stat-revenue').textContent = `₹${(stats.revenue||0).toLocaleString('en-IN')}`;
+    const ov = stats.overdueJobs || 0;
+    const banner = document.getElementById('overdue-banner');
+    if (ov > 0) { banner.classList.add('visible'); document.getElementById('overdue-count-text').textContent = `${ov} job${ov>1?'s':''}`; }
+    else banner.classList.remove('visible');
+  } catch(e) { console.error('Stats error', e); }
+
+  const recent = [...allJobs].sort((a,b) => new Date(b.created_at)-new Date(a.created_at)).slice(0,6);
+  document.getElementById('recent-jobs-tbody').innerHTML = recent.map(j =>
+    `<tr onclick="openDetail('${j.id}')">
+      <td><strong>${j.bike}</strong></td>
+      <td>${getCust(j.cust_id)?.name || '—'}</td>
+      <td>${getMech(j.mech_id)?.name || '<span style="color:var(--muted)">Unassigned</span>'}</td>
+      <td>${statusPill(j.status)}</td>
+      <td class="${isOverdue(j)?'job-sla danger':'job-sla'}">${hoursLeft(j)}</td>
+    </tr>`
+  ).join('') || '<tr><td colspan="5"><div class="empty-state"><i class="fa-solid fa-inbox"></i><p>No jobs yet — create your first!</p></div></td></tr>';
+
+  document.getElementById('mech-load-list').innerHTML = allMechanics.map(m => {
+    const load = getMechLoad(m.id);
+    const pct  = Math.min((load/3)*100, 100);
+    return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px"><span style="font-size:13px">${m.name}</span><span style="font-size:12px;color:var(--muted);font-family:var(--font-mono)">${load}/3</span></div>
+      <div class="workload-bar"><div class="workload-fill${load>=3?' danger':''}" style="width:${pct}%"></div></div>
+    </div>`;
+  }).join('') || '<div style="color:var(--muted);font-size:13px">No mechanics added.</div>';
+}
+
+// ── KANBAN ────────────────────────────────────────────────────────────────────
+function renderKanban() {
+  const cols = [
+    { key:'PENDING',     label:'Pending',     dot:'pending' },
+    { key:'IN_PROGRESS', label:'In Progress', dot:'inprogress' },
+    { key:'READY',       label:'Ready',       dot:'ready' },
+    { key:'DELIVERED',   label:'Delivered',   dot:'delivered' }
+  ];
+  document.getElementById('kanban-board').innerHTML = cols.map(col => {
+    const cards = allJobs.filter(j => j.status === col.key);
+    return `<div class="kanban-col">
+      <div class="kanban-col-header">
+        <div class="kanban-col-title"><span class="col-dot ${col.dot}"></span>${col.label}</div>
+        <span class="col-count">${cards.length}</span>
+      </div>
+      <div class="kanban-cards">
+        ${cards.map(j => `<div class="job-card${isOverdue(j)?' overdue':''}" onclick="openDetail('${j.id}')">
+          ${typeBadge(j.type)}
+          <div class="job-bike">${j.bike}</div>
+          <div class="job-customer"><i class="fa-solid fa-user"></i> ${getCust(j.cust_id)?.name || 'Unknown'}</div>
+          <div class="job-meta">
+            <span class="job-mechanic">${getMech(j.mech_id)?.name?.split(' ')[0] || 'None'}</span>
+            <span class="job-sla${isOverdue(j)?' danger':''}"><i class="fa-regular fa-clock"></i> ${hoursLeft(j)}</span>
+          </div>
+        </div>`).join('') || `<div class="empty-state" style="padding:24px"><i class="fa-solid fa-inbox"></i><p>No jobs</p></div>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── JOBS TABLE ────────────────────────────────────────────────────────────────
+function renderJobsTable() {
+  const filter   = document.getElementById('filter-status').value;
+  const filtered = filter ? allJobs.filter(j => j.status === filter) : allJobs;
+  document.getElementById('jobs-tbody').innerHTML = filtered.map(j =>
+    `<tr onclick="openDetail('${j.id}')">
+      <td><span class="tag">${j.id}</span></td>
+      <td><strong>${j.bike}</strong></td>
+      <td>${typeBadge(j.type)}</td>
+      <td>${getCust(j.cust_id)?.name || '—'}</td>
+      <td>${getMech(j.mech_id)?.name || '—'}</td>
+      <td>${statusPill(j.status)}</td>
+      <td class="${isOverdue(j)?'job-sla danger':'job-sla'}">${hoursLeft(j)}</td>
+      <td style="color:var(--muted);font-size:12px;font-family:var(--font-mono)">${new Date(j.created_at).toLocaleDateString()}</td>
+      <td onclick="event.stopPropagation()">
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost btn-icon btn-sm" onclick="editJob('${j.id}')" title="Edit"><i class="fa-solid fa-pen"></i></button>
+          <button class="btn btn-wa btn-icon btn-sm" onclick="sendWAForJob('${j.id}')" title="WhatsApp"><i class="fa-brands fa-whatsapp"></i></button>
+          <button class="btn btn-danger btn-icon btn-sm" onclick="deleteJob('${j.id}')" title="Delete"><i class="fa-solid fa-trash"></i></button>
+        </div>
+      </td>
+    </tr>`
+  ).join('') || '<tr><td colspan="9"><div class="empty-state"><i class="fa-solid fa-inbox"></i><p>No jobs found</p></div></td></tr>';
+}
+
+// ── MECHANICS ─────────────────────────────────────────────────────────────────
+function renderMechanics() {
+  document.getElementById('mechanics-grid').innerHTML = allMechanics.map(m => {
+    const load = getMechLoad(m.id);
+    const done = allJobs.filter(j => j.mech_id === m.id && j.status === 'DELIVERED').length;
+    return `<div class="mech-card">
+      <div class="mech-avatar">${m.name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase()}</div>
+      <div class="mech-name">${m.name}</div>
+      <div class="mech-spec"><i class="fa-solid fa-gear" style="margin-right:4px"></i>${m.spec}</div>
+      <div class="mech-stats">
+        <div class="mech-stat"><div class="mech-stat-val">${load}</div><div class="mech-stat-lbl">Active</div></div>
+        <div class="mech-stat"><div class="mech-stat-val">${done}</div><div class="mech-stat-lbl">Done</div></div>
+        <div class="mech-stat"><div class="mech-stat-val" style="color:${load>=3?'var(--red)':'var(--green)'}">${load>=3?'Busy':'Free'}</div><div class="mech-stat-lbl">Status</div></div>
+      </div>
+      <div class="workload-bar"><div class="workload-fill${load>=3?' danger':''}" style="width:${Math.min((load/3)*100,100)}%"></div></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" style="flex:1" onclick="editMechanic('${m.id}')"><i class="fa-solid fa-pen"></i> Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteMechanic('${m.id}')"><i class="fa-solid fa-trash"></i></button>
+      </div>
+    </div>`;
+  }).join('') || '<div class="empty-state"><i class="fa-solid fa-screwdriver-wrench"></i><p>No mechanics added yet</p></div>';
+}
+
+// ── CUSTOMERS ─────────────────────────────────────────────────────────────────
+function renderCustomers() {
+  const search   = (document.getElementById('customer-search')?.value || '').toLowerCase();
+  const filtered = allCustomers.filter(c => !search || c.name.toLowerCase().includes(search) || (c.phone||'').includes(search));
+  document.getElementById('customers-tbody').innerHTML = filtered.map(c => {
+    const cJobs  = allJobs.filter(j => j.cust_id === c.id);
+    const lastJob = cJobs.sort((a,b) => new Date(b.created_at)-new Date(a.created_at))[0];
+    return `<tr onclick="viewCustomerJobs('${c.id}')">
+      <td><strong>${c.name}</strong></td>
+      <td><span style="font-family:var(--font-mono);font-size:12px">${c.phone||'—'}</span></td>
+      <td><span class="tag">${cJobs.length}</span></td>
+      <td>${lastJob ? new Date(lastJob.created_at).toLocaleDateString() : '—'}</td>
+      <td style="color:var(--muted);font-size:12px">${new Date(c.since).toLocaleDateString()}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="5"><div class="empty-state"><i class="fa-solid fa-users"></i><p>No customers found</p></div></td></tr>';
+}
+
+function viewCustomerJobs(custId) {
+  const c     = allCustomers.find(c => c.id === custId);
+  const count = allJobs.filter(j => j.cust_id === custId).length;
+  toast(`${c?.name} · ${count} job${count!==1?'s':''}`, 'info');
+}
+
+// ── CHECKLIST ─────────────────────────────────────────────────────────────────
+let checklistItems = [];
+
+function renderChecklist() {
+  const container = document.getElementById('checklist-items');
+  if (!container) return;
+  const done = checklistItems.filter(x => x.done).length;
+  container.innerHTML = (checklistItems.length > 0 ? `<div class="cl-progress">${done}/${checklistItems.length} tasks done</div>` : '') +
+    checklistItems.map((item, i) =>
+      `<div class="checklist-item ${item.done?'done':''}">
+        <input type="checkbox" ${item.done?'checked':''} onchange="toggleChecklistItem(${i})">
+        <span class="cl-label" onclick="toggleChecklistItem(${i})">${escHtml(item.text)}</span>
+        <button class="cl-del" onclick="removeChecklistItem(${i})"><i class="fa-solid fa-xmark"></i></button>
+      </div>`
+    ).join('');
+  document.getElementById('job-issue').value = JSON.stringify(checklistItems);
+}
+
+function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function addChecklistItem() {
+  const inp = document.getElementById('checklist-new-item');
+  const text = inp.value.trim();
+  if (!text) return;
+  checklistItems.push({ text, done: false });
+  inp.value = '';
+  renderChecklist();
+}
+function toggleChecklistItem(i) { checklistItems[i].done = !checklistItems[i].done; renderChecklist(); }
+function removeChecklistItem(i) { checklistItems.splice(i, 1); renderChecklist(); }
+
+function loadChecklistFromString(issueStr) {
+  try { const p = JSON.parse(issueStr); if (Array.isArray(p)) { checklistItems = p; return; } } catch {}
+  checklistItems = issueStr ? issueStr.split('\n').filter(l => l.trim()).map(t => ({ text: t.trim().replace(/^[-*•✓✗] ?/, ''), done: /^[✓]/.test(t.trim()) })) : [];
+}
+
+function renderChecklistDetail(issueStr) {
+  let items = [];
+  try { const p = JSON.parse(issueStr); if (Array.isArray(p)) items = p; } catch {}
+  if (items.length === 0 && issueStr?.trim()) {
+    items = issueStr.split('\n').map(l => l.trim()).filter(Boolean).map(l => ({ text: l.replace(/^[-*•✓✗✘✔] ?/, '').trim(), done: /^[✓✔✘✗]/.test(l) }));
+  }
+  if (items.length === 0) return '<span style="color:var(--muted)">No tasks added</span>';
+  const done = items.filter(x => x.done).length;
+  return `<div style="margin-bottom:6px;font-size:11px;color:var(--muted);font-family:var(--font-mono)">${done}/${items.length} complete</div>
+    <div class="detail-checklist">${items.map(it =>
+      `<div class="detail-cl-item ${it.done?'done':''}">
+        <i class="fa-solid ${it.done?'fa-circle-check':'fa-circle'}" style="color:${it.done?'var(--green)':'var(--muted)'}"></i>
+        <span style="${it.done?'text-decoration:line-through;color:var(--muted)':''}">${escHtml(it.text)}</span>
+      </div>`).join('')}</div>`;
+}
+
+// ── JOB MODAL ─────────────────────────────────────────────────────────────────
+function openJobModal(editId) {
+  document.getElementById('job-mechanic').innerHTML =
+    '<option value="">— Unassigned —</option>' +
+    allMechanics.map(m => `<option value="${m.id}">${m.name} (${getMechLoad(m.id)} active)</option>`).join('');
+  if (editId) {
+    const j = allJobs.find(x => x.id === editId); if (!j) return;
+    document.getElementById('job-modal-title').textContent = 'Edit Job';
+    document.getElementById('job-edit-id').value   = editId;
+    document.getElementById('job-bike').value      = j.bike;
+    const c = getCust(j.cust_id);
+    document.getElementById('job-cust-name').value  = c?.name || '';
+    document.getElementById('job-cust-phone').value = c?.phone || '';
+    document.getElementById('job-type').value       = j.type;
+    document.getElementById('job-mechanic').value   = j.mech_id || '';
+    loadChecklistFromString(j.issue || '');
+    renderChecklist();
+    document.getElementById('job-status').value    = j.status;
+    document.getElementById('job-sla').value       = j.sla_hours;
+    const due = jobDueDate(j);
+    document.getElementById('job-est-date').value  = toDatetimeLocal(due);
+    updateSLAHint(due);
+  } else {
+    document.getElementById('job-modal-title').textContent = 'New Job';
+    document.getElementById('job-edit-id').value    = '';
+    document.getElementById('job-bike').value       = '';
+    document.getElementById('job-cust-name').value  = '';
+    document.getElementById('job-cust-phone').value = '';
+    document.getElementById('job-type').value       = 'Repair';
+    document.getElementById('job-mechanic').value   = '';
+    checklistItems = []; renderChecklist();
+    document.getElementById('job-status').value     = 'PENDING';
+    setEstDateFromHours(24);
+  }
+  document.getElementById('job-modal-overlay').classList.add('open');
+}
+function closeJobModal() { document.getElementById('job-modal-overlay').classList.remove('open'); }
+
+async function saveJob() {
+  const editId   = document.getElementById('job-edit-id').value;
+  const bikeName = document.getElementById('job-bike').value.trim();
+  const custName = document.getElementById('job-cust-name').value.trim();
+  if (!bikeName || !custName) { toast('Bike and customer name are required', 'error'); return; }
+
+  let custId = allCustomers.find(c => c.name.toLowerCase() === custName.toLowerCase())?.id;
+  if (!custId) {
+    const nc = await apiCall('/customers', { method: 'POST', body: JSON.stringify({ name: custName, phone: document.getElementById('job-cust-phone').value }) });
+    custId = nc.id;
+    await loadData();
+  }
+
+  const jobData = {
+    bike:      bikeName, cust_id: custId,
+    mech_id:   document.getElementById('job-mechanic').value || null,
+    type:      document.getElementById('job-type').value,
+    issue:     document.getElementById('job-issue').value,
+    sla_hours: parseInt(document.getElementById('job-sla').value) || 24,
+    status:    editId ? document.getElementById('job-status').value : 'PENDING'
+  };
+
+  try {
+    let savedId;
+    if (editId) { await apiCall(`/jobs/${editId}`, { method:'PUT', body: JSON.stringify(jobData) }); savedId = editId; }
+    else        { const c = await apiCall('/jobs',          { method:'POST', body: JSON.stringify(jobData) }); savedId = c.id; }
+    await loadData();
+    closeJobModal();
+    refreshCurrentPage();
+    toast(editId ? 'Job updated ✓' : 'Job created ✓');
+    const eventType = editId ? 'UPDATE' : 'NEW';
+    const savedJob  = allJobs.find(j => j.id === savedId);
+    setTimeout(() => autoNotifyJob(savedJob, eventType), 500);
+  } catch(err) { toast(err.message, 'error'); }
+}
+
+function editJob(id)  { openJobModal(id); }
+async function deleteJob(id) {
+  if (!confirm('Delete this job? This cannot be undone.')) return;
+  try { await apiCall(`/jobs/${id}`, { method:'DELETE' }); await loadData(); refreshCurrentPage(); toast('Job deleted', 'info'); }
+  catch(err) { toast(err.message, 'error'); }
+}
+
+// ── MECHANIC MODAL ────────────────────────────────────────────────────────────
+function openMechanicModal(editId) {
+  if (editId) {
+    const m = allMechanics.find(x => x.id === editId);
+    if (m) {
+      document.getElementById('mech-modal-title').textContent = 'Edit Mechanic';
+      document.getElementById('mech-edit-id').value = editId;
+      document.getElementById('mech-name').value    = m.name;
+      document.getElementById('mech-phone').value   = m.phone||'';
+      document.getElementById('mech-spec').value    = m.spec;
+    }
+  } else {
+    document.getElementById('mech-modal-title').textContent = 'Add Mechanic';
+    document.getElementById('mech-edit-id').value = '';
+    document.getElementById('mech-name').value    = '';
+    document.getElementById('mech-phone').value   = '';
+    document.getElementById('mech-spec').value    = 'General Repairs';
+  }
+  document.getElementById('mech-modal-overlay').classList.add('open');
+}
+function closeMechanicModal() { document.getElementById('mech-modal-overlay').classList.remove('open'); }
+async function saveMechanic() {
+  const name = document.getElementById('mech-name').value.trim();
+  if (!name) { toast('Name is required', 'error'); return; }
+  const editId = document.getElementById('mech-edit-id').value;
+  const data   = { name, phone: document.getElementById('mech-phone').value, spec: document.getElementById('mech-spec').value };
+  try {
+    if (editId) await apiCall(`/mechanics/${editId}`, { method:'PUT',  body: JSON.stringify(data) });
+    else        await apiCall('/mechanics',            { method:'POST', body: JSON.stringify(data) });
+    await loadData(); closeMechanicModal(); renderMechanics();
+    toast(editId ? 'Mechanic updated' : 'Mechanic added');
+  } catch(err) { toast(err.message, 'error'); }
+}
+function editMechanic(id) { openMechanicModal(id); }
+async function deleteMechanic(id) {
+  if (!confirm('Remove this mechanic?')) return;
+  try { await apiCall(`/mechanics/${id}`, { method:'DELETE' }); await loadData(); renderMechanics(); toast('Mechanic removed', 'info'); }
+  catch(err) { toast(err.message, 'error'); }
+}
+
+// ── DETAIL MODAL ──────────────────────────────────────────────────────────────
+async function openDetail(id) {
+  const job = allJobs.find(j => j.id === id); if (!job) return;
+  currentDetailJobId = id;
+  const m = getMech(job.mech_id), c = getCust(job.cust_id);
+  document.getElementById('detail-bike').textContent = job.bike;
+  document.getElementById('detail-id').textContent   = `#${job.id}`;
+  document.getElementById('detail-content').innerHTML = `
+    ${isOverdue(job) ? `<div style="background:var(--red-dim);border-radius:var(--radius);padding:10px 14px;margin-bottom:14px;font-size:12px;color:var(--red)"><i class="fa-solid fa-triangle-exclamation"></i> This job is <strong>overdue!</strong></div>` : ''}
+    <div class="detail-row"><div class="detail-label">Customer</div><div class="detail-value">${c?c.name:'—'} ${c?.phone?`<span style="color:var(--muted);font-family:var(--font-mono);font-size:11px;margin-left:8px">${c.phone}</span>`:''}</div></div>
+    <div class="detail-row"><div class="detail-label">Mechanic</div><div class="detail-value">${m?m.name:'<span style="color:var(--muted)">Unassigned</span>'}</div></div>
+    <div class="detail-row"><div class="detail-label">Status</div><div class="detail-value">${statusPill(job.status)}</div></div>
+    <div class="detail-row"><div class="detail-label">Type</div><div class="detail-value">${typeBadge(job.type)}</div></div>
+    <div class="detail-row"><div class="detail-label">Est. Completion</div><div class="detail-value"><span class="job-sla${isOverdue(job)?' danger':''}">${jobDueDate(job).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'})} <span style="color:var(--muted);font-size:11px">(${hoursLeft(job)})</span></span></div></div>
+    <div class="detail-row"><div class="detail-label">Tasks</div><div class="detail-value">${renderChecklistDetail(job.issue||'')}</div></div>
+    <div class="detail-row"><div class="detail-label">Created</div><div class="detail-value" style="color:var(--muted);font-family:var(--font-mono);font-size:12px">${new Date(job.created_at).toLocaleString()}</div></div>
+  `;
+  document.getElementById('status-buttons').innerHTML = ['PENDING','IN_PROGRESS','READY','DELIVERED'].map(s =>
+    `<button class="btn ${s===job.status?'btn-primary':'btn-ghost'} btn-sm" onclick="updateStatus('${id}','${s}')">${statusLabel(s)}</button>`
+  ).join('');
+  document.getElementById('detail-modal-overlay').classList.add('open');
+}
+function closeDetailModal() { document.getElementById('detail-modal-overlay').classList.remove('open'); }
+
+async function updateStatus(id, status) {
+  try {
+    const oldJob = allJobs.find(j => j.id === id);
+    await apiCall(`/jobs/${id}`, { method:'PUT', body: JSON.stringify({ status }) });
+    await loadData();
+    openDetail(id);
+    refreshCurrentPage();
+    toast(`Status → ${statusLabel(status)}`);
+    const updatedJob = allJobs.find(j => j.id === id);
+    if (updatedJob && updatedJob.status !== oldJob?.status) {
+      setTimeout(() => autoNotifyJob(updatedJob, updatedJob.status), 500);
+    }
+  } catch(err) { toast(err.message, 'error'); }
+}
+
+async function deleteJobFromDetail() {
+  if (!currentDetailJobId || !confirm('Delete this job?')) return;
+  try { await apiCall(`/jobs/${currentDetailJobId}`, { method:'DELETE' }); await loadData(); closeDetailModal(); refreshCurrentPage(); toast('Job deleted', 'info'); }
+  catch(err) { toast(err.message, 'error'); }
+}
+function editJobFromDetail() { if (!currentDetailJobId) return; closeDetailModal(); openJobModal(currentDetailJobId); }
+function sendWAFromDetail() {
+  if (!currentDetailJobId) return;
+  const job = allJobs.find(j => j.id === currentDetailJobId);
+  if (job) openWABridgeForJobs([job], job.status);
+}
+
+// ── WA BRIDGE MODAL (manual review flow) ─────────────────────────────────────
+function openWABridge() {
+  const readyJobs = allJobs.filter(j => j.status === 'READY');
+  if (readyJobs.length === 0) { toast('No READY jobs to notify', 'info'); return; }
+  openWABridgeForJobs(readyJobs, 'READY');
+}
+
+function openWABridgeForJobs(jobs, eventType) {
+  if (!jobs || jobs.length === 0) return;
+  eventType = eventType || 'UPDATE';
+  const cust = jobs[0] ? getCust(jobs[0].cust_id) : null;
+  const mech = jobs[0] ? getMech(jobs[0].mech_id) : null;
+  const shop = currentUser?.shop?.name || 'MotoShop';
+
+  waQueue = [];
+  if (cust?.phone) waQueue.push({ job: jobs[0], recipientType: 'customer', name: cust.name, phone: cust.phone, message: generateCustMessage(jobs[0], eventType, cust, shop) });
+  if (mech?.phone) waQueue.push({ job: jobs[0], recipientType: 'mechanic', name: mech.name, phone: mech.phone, message: generateMechMessage(jobs[0], eventType, mech, cust, shop) });
+
+  if (waQueue.length === 0) { toast('No phone numbers on record for this job', 'info'); return; }
+  waIndex = 0;
+  showWAStep();
+  document.getElementById('wa-modal-overlay').classList.add('open');
+}
+
+function showWAStep() {
+  if (waIndex >= waQueue.length) { closeWAModal(); toast('All WhatsApp notifications processed ✓'); return; }
+  const entry  = waQueue[waIndex];
+  const isCust = entry.recipientType === 'customer';
+  const hasPh  = !!(entry.phone && entry.phone.replace(/\D/g,'').length > 6);
+  document.getElementById('wa-progress').textContent    = `Notification ${waIndex + 1} of ${waQueue.length}`;
+  document.getElementById('wa-job-bike').textContent    = entry.job.bike;
+  document.getElementById('wa-job-status-line').textContent = `${statusLabel(entry.job.status)} · ${entry.job.type} · #${entry.job.id}`;
+  document.getElementById('wa-tab-cust').classList.toggle('active', isCust);
+  document.getElementById('wa-tab-mech').classList.toggle('active', !isCust);
+  document.getElementById('wa-recip-icon').className   = `fa-solid ${isCust?'fa-user':'fa-screwdriver-wrench'}`;
+  document.getElementById('wa-cust-name').textContent  = entry.name;
+  document.getElementById('wa-cust-phone').textContent = entry.phone || '';
+  document.getElementById('wa-no-phone-warn').style.display = hasPh ? 'none' : 'inline-flex';
+  document.getElementById('wa-message').value          = entry.message;
+}
+
+function waSend() {
+  const entry = waQueue[waIndex];
+  const phone = (entry.phone || '').replace(/\D/g, '');
+  const msg   = document.getElementById('wa-message').value.trim();
+  if (!msg) { toast('Message is empty', 'error'); return; }
+  const url = phone ? `https://wa.me/${phone}?text=${encodeURIComponent(msg)}` : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+  window.open(url, '_blank');
+  waIndex++;
+  if (waIndex < waQueue.length) { setTimeout(showWAStep, 350); toast(`Sent to ${entry.name} · ${waIndex} of ${waQueue.length} done`, 'success'); }
+  else { closeWAModal(); toast('All notifications sent! ✓'); }
+}
+
+function waSkip() {
+  const entry = waQueue[waIndex];
+  waIndex++;
+  if (waIndex < waQueue.length) { showWAStep(); toast(`Skipped ${entry.name}`, 'info'); }
+  else { closeWAModal(); toast('Done', 'info'); }
+}
+
+function closeWAModal() {
+  document.getElementById('wa-modal-overlay').classList.remove('open');
+  waQueue = []; waIndex = 0;
+}
+
+function sendWAForJob(jobId) {
+  const job = allJobs.find(j => j.id === jobId);
+  if (job) openWABridgeForJobs([job], job.status);
+}
+
+// ── DEADLINE REMINDER SYSTEM ──────────────────────────────────────────────────
+const REMINDER_THRESHOLDS = [{ key:'2h', mins:120 }, { key:'30m', mins:30 }];
+
+function getRemindersFired() { try { return JSON.parse(sessionStorage.getItem('moto_reminders') || '{}'); } catch { return {}; } }
+function markReminderFired(jobId, key) {
+  const fired = getRemindersFired();
+  if (!fired[jobId]) fired[jobId] = {};
+  fired[jobId][key] = Date.now();
+  sessionStorage.setItem('moto_reminders', JSON.stringify(fired));
+}
+
+async function sendDeadlineReminder(job, minsLeft, thresholdKey) {
+  const mech = getMech(job.mech_id);
+  const cust = getCust(job.cust_id);
+  if (!mech?.phone) return;
+  const shop = currentUser?.shop?.name || 'MotoShop';
+  const msg  = `⏰ *Deadline Reminder* — ${shop}\n\nHi ${mech.name}, job *${job.id}* is due in *${minsLeft<60?minsLeft+' minutes':Math.round(minsLeft/60)+' hour(s)'}*!\n\n🏍️ ${job.bike} · 👤 ${cust?.name||'—'}\n📅 Due: ${jobDueDate(job).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'})}\n🔧 Status: *${statusLabel(job.status)}* 🚨`;
+  const cfg  = (await loadConfig()) || {};
+  await silentSendWA([{ phone: mech.phone, message: msg }], cfg);
+  markReminderFired(job.id, thresholdKey);
+}
+
+function checkDeadlines() {
+  if (!authToken || !allJobs.length) return;
+  const fired = getRemindersFired();
+  const now   = Date.now();
+  for (const job of allJobs) {
+    if (job.status === 'DELIVERED' || job.status === 'READY' || !job.mech_id) continue;
+    const minsLeft = Math.round((jobDueDate(job).getTime() - now) / 60000);
+    for (const { key, mins } of REMINDER_THRESHOLDS) {
+      if (minsLeft <= mins && minsLeft > -5 && !fired[job.id]?.[key]) {
+        sendDeadlineReminder(job, Math.max(0, minsLeft), key);
+      }
+    }
+  }
+}
+
+let _deadlineInterval = null;
+function startDeadlineChecker() {
+  if (_deadlineInterval) clearInterval(_deadlineInterval);
+  _deadlineInterval = setInterval(checkDeadlines, 60000);
+  setTimeout(checkDeadlines, 5000);
+}
+
+// ── SETTINGS ──────────────────────────────────────────────────────────────────
+async function renderSettings() {
+  const cfg = (await loadConfig()) || {};
+  document.getElementById('cfg-supabase-url').value = cfg.supabaseUrl || '';
+  document.getElementById('cfg-supabase-key').value = cfg.supabaseKey || '';
+  document.getElementById('cfg-wa-url').value        = cfg.waUrl || '';
+  document.getElementById('cfg-wa-key').value        = cfg.waKey || '';
+  document.getElementById('cfg-shop-name').value     = cfg.shopName || currentUser?.shop?.name || '';
+  document.getElementById('cfg-shop-phone').value    = cfg.shopPhone || currentUser?.shop?.phone || '';
+  document.getElementById('cfg-shop-email').value    = cfg.shopEmail || currentUser?.shop?.email || '';
+  document.getElementById('cfg-currency').value      = cfg.currency || '₹';
+  const silentToggle = document.getElementById('cfg-silent-wa');
+  if (silentToggle) silentToggle.checked = cfg.silentWhatsApp === true;
+
+  // Reflect server's actual DB mode (not just cached config)
+  try {
+    const r    = await fetch(`${CLIENT_API}/config`);
+    const info = await r.json();
+    const badge = document.getElementById('db-status-badge');
+    if (info.hasSupabase) {
+      badge.className = 'settings-status connected';
+      badge.innerHTML = '<i class="fa-solid fa-circle"></i> Connected';
+    } else {
+      badge.className = 'settings-status disconnected';
+      badge.innerHTML = '<i class="fa-solid fa-circle"></i> Not configured';
+    }
+  } catch {}
+
+  setWAMode(cfg.waMode || 'link');
+}
+
+/**
+ * Save all settings.
+ * One call to saveConfig() handles everything:
+ * — Stores all settings in the shop config JSON (persisted in DB or in-memory)
+ * — The server's PUT /api/shop/config also activates Supabase & writes to creds file
+ * No duplicate call to /api/config needed.
+ */
+async function saveAllSettings() {
+  const supabaseUrl    = document.getElementById('cfg-supabase-url').value.trim();
+  const supabaseKey    = document.getElementById('cfg-supabase-key').value.trim();
+  const silentWhatsApp = document.getElementById('cfg-silent-wa')?.checked ?? false;
+
+  try {
+    await saveConfig({
+      supabaseUrl,
+      supabaseKey,
+      waUrl:       document.getElementById('cfg-wa-url').value.trim(),
+      waKey:       document.getElementById('cfg-wa-key').value.trim(),
+      waMode:      document.getElementById('wa-tab-bridge').classList.contains('active') ? 'bridge' : 'link',
+      shopName:    document.getElementById('cfg-shop-name').value.trim(),
+      shopPhone:   document.getElementById('cfg-shop-phone').value.trim(),
+      shopEmail:   document.getElementById('cfg-shop-email').value.trim(),
+      currency:    document.getElementById('cfg-currency').value,
+      silentWhatsApp
+    });
+
+    toast('Settings saved ✓');
+    document.getElementById('memory-mode-banner')?.remove();
+    renderSettings();
+
+    // Run a connection test so the badge updates immediately
+    if (supabaseUrl && supabaseKey) await testSupabaseConnection();
+
+  } catch (err) {
+    toast('Failed to save: ' + err.message, 'error');
+  }
+}
+
+function markDbUnsaved() {
+  const badge = document.getElementById('db-status-badge');
+  if (badge) { badge.className = 'settings-status pending'; badge.innerHTML = '<i class="fa-solid fa-circle"></i> Unsaved'; }
+}
+
+async function testSupabaseConnection() {
+  const url    = document.getElementById('cfg-supabase-url').value.trim().replace(/\/$/, '');
+  const key    = document.getElementById('cfg-supabase-key').value.trim();
+  const badge  = document.getElementById('db-status-badge');
+  const result = document.getElementById('db-test-result');
+  if (!url || !key) { result.textContent = '⚠ Enter URL and key first'; result.style.color = 'var(--orange)'; return; }
+  result.textContent = 'Testing…'; result.style.color = 'var(--muted)';
+  try {
+    const res = await fetch(`${url}/auth/v1/settings`, { headers: { 'apikey': key, 'Authorization': `Bearer ${key}` } });
+    if (res.ok) {
+      badge.className = 'settings-status connected'; badge.innerHTML = '<i class="fa-solid fa-circle"></i> Connected';
+      result.textContent = '✓ Connected to Supabase!'; result.style.color = 'var(--green)';
+    } else {
+      throw new Error(res.status === 401 ? 'Invalid API key' : res.status === 403 ? 'Forbidden — check permissions' : `HTTP ${res.status}`);
+    }
+  } catch(e) {
+    badge.className = 'settings-status disconnected'; badge.innerHTML = '<i class="fa-solid fa-circle"></i> Failed';
+    result.textContent = `✗ ${e.message}`; result.style.color = 'var(--red)';
+  }
+}
+
+async function testWABridge() {
+  const url    = document.getElementById('cfg-wa-url').value.trim();
+  const key    = document.getElementById('cfg-wa-key').value.trim();
+  const result = document.getElementById('wa-test-result');
+  if (!url) { result.textContent = '⚠ Enter bridge URL first'; result.style.color = 'var(--orange)'; return; }
+  result.textContent = 'Testing…'; result.style.color = 'var(--muted)';
+  try {
+    const headers = key ? { 'Authorization': `Bearer ${key}` } : {};
+    const res = await fetch(url.replace('/send', '/health'), { headers });
+    if (res.ok) {
+      result.textContent = '✓ Bridge is reachable'; result.style.color = 'var(--green)';
+      const badge = document.getElementById('wa-status-badge');
+      badge.className = 'settings-status connected'; badge.innerHTML = '<i class="fa-solid fa-circle"></i> Bridge connected';
+    } else { throw new Error(`HTTP ${res.status}`); }
+  } catch(e) { result.textContent = `✗ ${e.message}`; result.style.color = 'var(--red)'; }
+}
+
+function setWAMode(mode) {
+  document.getElementById('wa-tab-link').classList.toggle('active', mode === 'link');
+  document.getElementById('wa-tab-bridge').classList.toggle('active', mode === 'bridge');
+  document.getElementById('wa-link-config').style.display   = mode === 'link'   ? 'block' : 'none';
+  document.getElementById('wa-bridge-config').style.display = mode === 'bridge' ? 'block' : 'none';
+  const badge = document.getElementById('wa-status-badge');
+  if (mode === 'link') { badge.className = 'settings-status pending'; badge.innerHTML = '<i class="fa-solid fa-circle"></i> wa.me links'; }
+}
+
+function toggleShowKey() {
+  const input = document.getElementById('cfg-supabase-key');
+  const icon  = document.getElementById('eye-icon');
+  if (input.type === 'password') { input.type = 'text'; icon.className = 'fa-solid fa-eye-slash'; }
+  else { input.type = 'password'; icon.className = 'fa-solid fa-eye'; }
+}
+
+async function refreshQR() {
+  const url    = document.getElementById('cfg-wa-url').value.trim();
+  const key    = document.getElementById('cfg-wa-key').value.trim();
+  const qrDisp = document.getElementById('qr-display');
+  const connSt = document.getElementById('wa-conn-status');
+  const qrInst = document.getElementById('qr-instructions');
+  if (!url) { document.getElementById('wa-test-result').textContent = '⚠ Enter bridge URL first'; return; }
+  const baseUrl = url.replace(/\/api\/send.*$/, '');
+  const headers = key ? { 'Authorization': `Bearer ${key}` } : {};
+  qrDisp.innerHTML = '<div style="text-align:center;color:var(--muted)"><span class="spinner"></span><br><br>Loading QR…</div>';
+  connSt.textContent = '● Connecting…'; connSt.style.color = 'var(--orange)';
+  try {
+    const sr = await fetch(`${baseUrl}/api/status`, { headers });
+    if (sr.ok) {
+      const s = await sr.json();
+      if (s.connected) {
+        connSt.textContent = '● Connected ✓'; connSt.style.color = 'var(--green)';
+        qrDisp.innerHTML = '<div style="text-align:center;padding:16px"><i class="fa-solid fa-circle-check" style="font-size:40px;color:var(--green)"></i><div style="margin-top:10px;font-size:13px">WhatsApp is connected!</div></div>';
+        qrInst.style.display = 'none'; return;
+      }
+    }
+    const qr = await fetch(`${baseUrl}/api/qr`, { headers });
+    if (!qr.ok) throw new Error(`Bridge returned ${qr.status}`);
+    const qd = await qr.json();
+    if (qd.qr) {
+      qrDisp.innerHTML = `<img src="${qd.qr}" style="max-width:200px;border-radius:8px">`;
+      qrInst.style.display = 'block'; connSt.textContent = '● Scan QR to connect'; connSt.style.color = 'var(--orange)';
+    } else { throw new Error('No QR code available'); }
+  } catch(e) {
+    connSt.textContent = '● Bridge offline'; connSt.style.color = 'var(--red)';
+    qrDisp.innerHTML = `<div style="text-align:center;color:var(--muted)"><i class="fa-solid fa-plug-circle-xmark" style="font-size:28px;margin-bottom:10px;display:block;color:var(--red)"></i><div style="font-size:12px">${e.message}</div></div>`;
+  }
+}
+
+// ── START ─────────────────────────────────────────────────────────────────────
+boot();
+</script>
+</body>
+</html>

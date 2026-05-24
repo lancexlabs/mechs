@@ -1,0 +1,4 @@
+[2026-05-23T14:17:31.129Z] [INFO] VeloShop WhatsApp Bridge listening on :3210
+[2026-05-23T14:17:31.131Z] [INFO] API Secret: chan**************
+[2026-05-23T14:17:31.132Z] [INFO] Endpoints: GET /status | GET /qr | POST /start | POST /stop | POST /send | GET /logs | DELETE /session
+[2026-05-23T14:31:09.453Z] [INFO] Received SIGINT — shutting down…
