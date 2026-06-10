@@ -780,7 +780,7 @@ async function api(method, path, body=null){
     return {ok:r.ok,status:r.status,data};
   }catch(e){
     if(e.name==='TypeError'){
-      throw new Error('Cannot reach server (port 3002). Is client-server.js running?');
+      throw new Error('Cannot reach server. Check your internet connection or contact support.');
     }
     throw e;
   }
@@ -790,11 +790,14 @@ async function api(method, path, body=null){
 // INIT: check if activated
 // ══════════════════════════════════════════
 async function init(){
+  // Show a connecting state — Render free tier can take ~15s to wake
+  const loginShopName = document.getElementById('login-shop-name');
+  if(loginShopName) loginShopName.textContent = 'Connecting…';
+  document.getElementById('login-overlay').classList.add('open');
   try{
     const r=await api('GET','/api/license/status');
     if(r.ok && r.data.activated){
-      document.getElementById('login-shop-name').textContent=r.data.shop_name||'Bike Workshop';
-      document.getElementById('login-overlay').classList.add('open');
+      if(loginShopName) loginShopName.textContent=r.data.shop_name||'Bike Workshop';
     } else {
       document.getElementById('login-overlay').classList.remove('open');
       const backBtn=document.getElementById('act-back-btn');
@@ -802,7 +805,9 @@ async function init(){
       document.getElementById('act-overlay').classList.add('open');
     }
   }catch(e){
-    toast(e.message,'error');
+    if(loginShopName) loginShopName.textContent='Connection failed';
+    toast('⚠️ ' + e.message + ' — retrying in 10s…','error', 9000);
+    setTimeout(init, 10000);
   }
 }
 
