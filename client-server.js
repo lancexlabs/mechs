@@ -21,55 +21,77 @@ const bcrypt = require('bcrypt');
 const cookieParser = require('cookie-parser');
 const crypto = require('crypto');
 const http = require('http');
+const fs = require('fs');
 const { createClient } = require('@supabase/supabase-js');
+require('dotenv').config();
+const rateLimit = require('express-rate-limit');
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { success: false, error: 'Too many login attempts. Try again in 15 minutes.' },
+  standardHeaders: true, legacyHeaders: false
+});
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 200,
+  message: { success: false, error: 'Too many requests.' },
+  standardHeaders: true, legacyHeaders: false
+});
 
 const app = express();
 const PORT = 3002;
 const CENTRAL_SERVER = 'http://localhost:3001';
-const JWT_SECRET = 'velo-shop-jwt-secret-2024-change-in-prod';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('❌  JWT_SECRET must be set in .env');
+  process.exit(1);
+}
 const SALT_ROUNDS = 10;
 
 // ─────────────────────────────────────────────
 // MIDDLEWARE
 // ─────────────────────────────────────────────
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  : ['http://localhost:5500', 'http://127.0.0.1:5500', 'null'];
+
 app.use(cors({
-  origin: '*',
+  origin: (origin, cb) => {
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    cb(new Error('CORS: origin not allowed'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express.json());
+app.use(express.json({ limit: '100kb' }));
+app.use(apiLimiter);
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.removeHeader('X-Powered-By');
+  next();
+});
 app.use(cookieParser());
 
 // ─────────────────────────────────────────────
 // SHOP STATE (in-memory, populated at activation / boot)
-// Only metadata — all real data lives in Supabase
 // ─────────────────────────────────────────────
-let shopState = null;       // { id, license_key, name, phone, email, address, plan, ... }
-let supabase = null;        // Supabase client, created after activation
+let shopState = null;
+let supabase = null;
 
-// Cached license state (refreshed periodically)
+// Cache for license state
 let licenseCache = null;
 let licenseCacheTime = 0;
-const LICENSE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const LICENSE_CACHE_TTL = 5 * 60 * 1000;
 
 // ─────────────────────────────────────────────
-// HELPERS: SUPABASE CLIENT
+// PERSISTENCE: shop_state.json
 // ─────────────────────────────────────────────
-function getSupabase() {
-  if (!supabase) throw new Error('Supabase not initialised. Shop not activated.');
-  return supabase;
-}
-
-function initSupabase(url, anonKey) {
-  supabase = createClient(url, anonKey, { auth: { persistSession: false } });
-  console.log('[Supabase] Client initialised for', url.replace(/^(https?:\/\/[^.]+).*/, '$1…'));
-}
-
-// ─────────────────────────────────────────────
-// PERSISTENCE: shop_state.json survives restarts
-// ─────────────────────────────────────────────
-const fs = require('fs');
 const STATE_FILE = './shop_state.json';
 
 function persistShopState(state) {
@@ -105,15 +127,28 @@ async function bootRehydrate() {
       console.log(`[BOOT] Re-hydrated shop "${shopState.name}" (${shopState.id}) from Supabase.`);
     } else {
       console.warn('[BOOT] Shop row not found in Supabase — may need re-activation.', error?.message || '');
-      supabase = null; // don't leave a broken client
+      supabase = null;
+      shopState = null;
     }
   } catch (e) {
     console.error('[BOOT] Failed to rehydrate:', e.message);
+    supabase = null;
+    shopState = null;
   }
 }
 
+function getSupabase() {
+  if (!supabase) throw new Error('Supabase not initialised. Shop not activated.');
+  return supabase;
+}
+
+function initSupabase(url, anonKey) {
+  supabase = createClient(url, anonKey, { auth: { persistSession: false } });
+  console.log('[Supabase] Client initialised for', url.replace(/^(https?:\/\/[^.]+).*/, '$1…'));
+}
+
 // ─────────────────────────────────────────────
-// HELPERS: HTTP REQUEST TO CENTRAL SERVER
+// HELPERS
 // ─────────────────────────────────────────────
 function centralPost(path, body) {
   return new Promise((resolve, reject) => {
@@ -144,10 +179,15 @@ function generateShopId() {
 }
 
 function getShop() { return shopState; }
+function safeInt(val) {
+  const n = parseInt(val);
+  if (isNaN(n)) throw new Error('Invalid ID parameter');
+  return n;
+}
 function isActivated() { return !!shopState; }
 
 // ─────────────────────────────────────────────
-// VALIDATE LICENSE (with cache)
+// VALIDATE LICENSE
 // ─────────────────────────────────────────────
 async function validateLicense(forceRefresh = false) {
   const shop = getShop();
@@ -205,7 +245,7 @@ function requireActivation(req, res, next) {
 // ─────────────────────────────────────────────
 // ROUTE: HEALTH CHECK
 // ─────────────────────────────────────────────
-app.get('/health', async (req, res) => {
+app.get('/health', requireAuth, async (req, res) => {
   const shop = getShop();
   let counts = { users: 0, jobs: 0, mechanics: 0, customers: 0 };
   if (shop && supabase) {
@@ -228,13 +268,19 @@ app.get('/health', async (req, res) => {
 // ─────────────────────────────────────────────
 // ROUTE: SETUP / ACTIVATE LICENSE
 // ─────────────────────────────────────────────
-app.post('/api/setup', async (req, res) => {
+app.post('/api/setup', authLimiter, async (req, res) => {
   try {
+    // Allow re-activation even if already activated (for renewal scenarios)
     if (isActivated()) {
-      return res.status(400).json({ success: false, error: 'This shop instance is already activated.' });
+      console.log('[SETUP] Existing activation found. Will re-activate with new credentials.');
+      supabase = null;
+      shopState = null;
+      if (fs.existsSync(STATE_FILE)) {
+        fs.unlinkSync(STATE_FILE);
+      }
     }
 
-    const { licenseKey, shopName, shopPhone, shopEmail, shopAddress, adminPin } = req.body;
+    const { licenseKey, adminPin, shopName, shopPhone, shopEmail, shopAddress } = req.body;
     if (!licenseKey || !adminPin) {
       return res.status(400).json({ success: false, error: 'licenseKey and adminPin are required' });
     }
@@ -311,9 +357,9 @@ app.post('/api/setup', async (req, res) => {
     const { error: shopErr } = await sb.from('shops').upsert(shopRecord);
     if (shopErr) throw new Error('Failed to save shop: ' + shopErr.message);
 
-    // Step 5: Create admin user in Supabase
+    // Step 5: Create admin user if not exists
     const { data: existingUser } = await sb.from('users')
-      .select('id').eq('shop_id', shopId).eq('username', creds.admin_username).maybeSingle();
+      .select('id').eq('username', creds.admin_username).maybeSingle();
 
     if (!existingUser) {
       const { error: userErr } = await sb.from('users').insert({
@@ -331,7 +377,7 @@ app.post('/api/setup', async (req, res) => {
     // Step 6: Seed demo data if shop is brand new
     await seedDemoData(sb, shopId);
 
-    // Step 7: Load into memory and persist to disk for restarts
+    // Step 7: Load into memory and persist to disk
     shopState = shopRecord;
     persistShopState(shopRecord);
 
@@ -344,8 +390,8 @@ app.post('/api/setup', async (req, res) => {
     });
   } catch (err) {
     console.error('[POST /api/setup]', err);
-    // Reset supabase client if activation failed
     supabase = null;
+    shopState = null;
     res.status(500).json({ success: false, error: 'Server error during setup: ' + err.message });
   }
 });
@@ -354,7 +400,6 @@ app.post('/api/setup', async (req, res) => {
 // SEED DEMO DATA
 // ─────────────────────────────────────────────
 async function seedDemoData(sb, shopId) {
-  // Only seed if no mechanics exist yet for this shop
   const { count } = await sb.from('mechanics')
     .select('*', { count: 'exact', head: true }).eq('shop_id', shopId);
   if (count > 0) return;
@@ -370,9 +415,17 @@ async function seedDemoData(sb, shopId) {
 }
 
 // ─────────────────────────────────────────────
+// ROUTE: LICENSE STATUS
+// ─────────────────────────────────────────────
+app.get('/api/license/status', (req, res) => {
+  const shop = getShop();
+  res.json({ success: true, activated: isActivated(), shop_name: shop?.name || null });
+});
+
+// ─────────────────────────────────────────────
 // ROUTE: AUTH
 // ─────────────────────────────────────────────
-app.post('/api/auth/login', requireActivation, async (req, res) => {
+app.post('/api/auth/login', requireActivation, authLimiter, async (req, res) => {
   try {
     const { username, pin } = req.body;
     if (!username || !pin) {
@@ -384,7 +437,6 @@ app.post('/api/auth/login', requireActivation, async (req, res) => {
 
     const { data: user, error } = await sb.from('users')
       .select('*')
-      .eq('shop_id', shop.id)
       .ilike('username', username.trim())
       .maybeSingle();
 
@@ -474,7 +526,6 @@ app.put('/api/shop/config', requireActivation, requireAuth, async (req, res) => 
     const { data: updated, error } = await sb.from('shops').update(updates).eq('id', shop.id).select().maybeSingle();
     if (error) throw error;
 
-    // Keep in-memory state in sync
     Object.assign(shopState, updates);
     if (shop_name) shopState.name = shop_name;
 
@@ -506,7 +557,6 @@ app.get('/api/dashboard/stats', requireActivation, requireAuth, async (req, res)
       .filter(j => j.status === 'DELIVERED' && j.completed_at && new Date(j.completed_at) >= today)
       .reduce((s, j) => s + (parseFloat(j.actual_cost) || 0), 0);
 
-    // Recent 5 jobs enriched with customer/mechanic names
     const recentJobIds = [...jobs].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 5);
     const custIds = [...new Set(recentJobIds.map(j => j.cust_id).filter(Boolean))];
     const mechIds = [...new Set(recentJobIds.map(j => j.mech_id).filter(Boolean))];
@@ -525,7 +575,6 @@ app.get('/api/dashboard/stats', requireActivation, requireAuth, async (req, res)
       mechanic_name: mechMap[j.mech_id]?.name || 'Unassigned'
     }));
 
-    // Mechanic load
     const { data: activeMechs } = await sb.from('mechanics').select('id,name,speciality').eq('shop_id', shop.id).eq('is_active', true);
     const mechanicLoad = (activeMechs || []).map(m => ({
       ...m,
@@ -620,7 +669,6 @@ app.post('/api/jobs', requireActivation, requireAuth, async (req, res) => {
     }).select().single();
     if (error) throw error;
 
-    // Update customer total_jobs
     await sb.from('customers').update({ total_jobs: customer.total_jobs + 1 }).eq('id', customer.id);
 
     const mechName = mech_id
@@ -638,7 +686,7 @@ app.put('/api/jobs/:id', requireActivation, requireAuth, async (req, res) => {
   try {
     const shop = getShop();
     const sb = getSupabase();
-    const jobId = parseInt(req.params.id);
+    const jobId = safeInt(req.params.id);
 
     const { data: existingJob } = await sb.from('jobs').select('*').eq('id', jobId).eq('shop_id', shop.id).maybeSingle();
     if (!existingJob) return res.status(404).json({ success: false, error: 'Job not found' });
@@ -661,13 +709,11 @@ app.put('/api/jobs/:id', requireActivation, requireAuth, async (req, res) => {
 
     if (nowDelivered && !wasDelivered) {
       updates.completed_at = new Date().toISOString();
-      // Update mechanic jobs_completed
       const mechIdToUse = updates.mech_id ?? existingJob.mech_id;
       if (mechIdToUse) {
         const { data: mech } = await sb.from('mechanics').select('jobs_completed').eq('id', mechIdToUse).maybeSingle();
         if (mech) await sb.from('mechanics').update({ jobs_completed: (mech.jobs_completed || 0) + 1 }).eq('id', mechIdToUse);
       }
-      // Update customer total_spent
       const custIdToUse = updates.cust_id ?? existingJob.cust_id;
       const { data: cust } = await sb.from('customers').select('total_spent').eq('id', custIdToUse).maybeSingle();
       if (cust) await sb.from('customers').update({ total_spent: (cust.total_spent || 0) + (updates.actual_cost ?? existingJob.actual_cost) }).eq('id', custIdToUse);
@@ -697,7 +743,7 @@ app.delete('/api/jobs/:id', requireActivation, requireAuth, async (req, res) => 
   try {
     const shop = getShop();
     const sb = getSupabase();
-    const { error } = await sb.from('jobs').delete().eq('id', parseInt(req.params.id)).eq('shop_id', shop.id);
+    const { error } = await sb.from('jobs').delete().eq('id', safeInt(req.params.id)).eq('shop_id', shop.id);
     if (error) throw error;
     res.json({ success: true, message: 'Job deleted' });
   } catch (err) {
@@ -759,7 +805,7 @@ app.put('/api/mechanics/:id', requireActivation, requireAuth, async (req, res) =
     if (is_active !== undefined) updates.is_active = Boolean(is_active);
 
     const { data, error } = await sb.from('mechanics').update(updates)
-      .eq('id', parseInt(req.params.id)).eq('shop_id', shop.id).select().single();
+      .eq('id', safeInt(req.params.id)).eq('shop_id', shop.id).select().single();
     if (error) throw error;
     res.json({ success: true, message: 'Mechanic updated', mechanic: data });
   } catch (err) {
@@ -771,7 +817,7 @@ app.delete('/api/mechanics/:id', requireActivation, requireAuth, async (req, res
   try {
     const shop = getShop();
     const sb = getSupabase();
-    const mechId = parseInt(req.params.id);
+    const mechId = safeInt(req.params.id);
 
     const { count } = await sb.from('jobs').select('*', { count: 'exact', head: true })
       .eq('mech_id', mechId).eq('shop_id', shop.id).neq('status', 'DELIVERED');
@@ -815,7 +861,6 @@ app.post('/api/customers', requireActivation, requireAuth, async (req, res) => {
     const { name, phone, email, address } = req.body;
     if (!name || !phone) return res.status(400).json({ success: false, error: 'name and phone are required' });
 
-    // Phone uniqueness per shop
     const { data: existing } = await sb.from('customers').select('id').eq('shop_id', shop.id).eq('phone', phone.trim()).maybeSingle();
     if (existing) return res.status(409).json({ success: false, error: `Customer with phone ${phone} already exists` });
 
@@ -844,7 +889,7 @@ app.put('/api/customers/:id', requireActivation, requireAuth, async (req, res) =
     if (address !== undefined) updates.address = address.trim();
 
     const { data, error } = await sb.from('customers').update(updates)
-      .eq('id', parseInt(req.params.id)).eq('shop_id', shop.id).select().single();
+      .eq('id', safeInt(req.params.id)).eq('shop_id', shop.id).select().single();
     if (error) throw error;
     res.json({ success: true, message: 'Customer updated', customer: data });
   } catch (err) {
@@ -856,7 +901,7 @@ app.delete('/api/customers/:id', requireActivation, requireAuth, async (req, res
   try {
     const shop = getShop();
     const sb = getSupabase();
-    const custId = parseInt(req.params.id);
+    const custId = safeInt(req.params.id);
 
     const { count } = await sb.from('jobs').select('*', { count: 'exact', head: true })
       .eq('cust_id', custId).eq('shop_id', shop.id).neq('status', 'DELIVERED');
@@ -891,11 +936,6 @@ app.get('/api/license/info', requireActivation, requireAuth, async (req, res) =>
   }
 });
 
-app.get('/api/license/status', (req, res) => {
-  const shop = getShop();
-  res.json({ success: true, activated: isActivated(), shop_name: shop?.name || null });
-});
-
 // ─────────────────────────────────────────────
 // ROUTE: WHATSAPP STATUS
 // ─────────────────────────────────────────────
@@ -916,7 +956,7 @@ app.get('/api/whatsapp/status', requireActivation, requireAuth, async (req, res)
 });
 
 // ─────────────────────────────────────────────
-// ROUTE: SUPABASE STATUS / CONNECTION CHECK
+// ROUTE: SUPABASE STATUS
 // ─────────────────────────────────────────────
 app.get('/api/status', requireActivation, requireAuth, async (req, res) => {
   const shop = getShop();
@@ -965,7 +1005,6 @@ app.get('/api/status', requireActivation, requireAuth, async (req, res) => {
 });
 
 app.get('/api/license-db/status', requireActivation, requireAuth, async (req, res) => {
-  // Ping the central server's public health endpoint — no auth token needed
   const t0 = Date.now();
   try {
     const result = await new Promise((resolve, reject) => {
@@ -1014,7 +1053,7 @@ app.use((req, res) => {
 });
 
 // ─────────────────────────────────────────────
-// START SERVER — rehydrate first, then listen
+// START SERVER
 // ─────────────────────────────────────────────
 bootRehydrate().then(() => {
   app.listen(PORT, () => {
