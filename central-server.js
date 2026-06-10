@@ -47,7 +47,7 @@ const apiLimiter = rateLimit({
 });
 
 const app = express();
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   console.error('❌  JWT_SECRET must be set in .env (use a long random string)');
@@ -75,13 +75,21 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
 // ─────────────────────────────────────────────
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-  : ['http://localhost:3002', 'http://localhost:5500', 'http://127.0.0.1:5500'];
+  : [
+      'http://localhost:3002', 'http://localhost:5500', 'http://127.0.0.1:5500',
+      'https://lancexlabs.github.io'
+    ];
 
 app.use(cors({
   origin: (origin, cb) => {
     // Allow server-to-server (no origin) and listed origins
-    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
-    cb(new Error('CORS: origin not allowed'));
+    if (!origin) return cb(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    // Allow any *.github.io or *.onrender.com (client server calling central)
+    if (/^https:\/\/[a-z0-9-]+\.github\.io$/.test(origin)) return cb(null, true);
+    if (/^https:\/\/[a-z0-9-]+\.onrender\.com$/.test(origin)) return cb(null, true);
+    if (/^https:\/\/[a-z0-9-]+\.netlify\.app$/.test(origin)) return cb(null, true);
+    cb(new Error('CORS: origin not allowed — ' + origin));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
