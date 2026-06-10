@@ -28,10 +28,31 @@ const crypto = require('crypto');
 const https = require('https');
 const httpModule = require('http');
 const { createClient } = require('@supabase/supabase-js');
+const rateLimit = require('express-rate-limit');
+
+// Strict rate limit for auth & credential endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  message: { success: false, error: 'Too many attempts. Try again in 15 minutes.' },
+  standardHeaders: true, legacyHeaders: false
+});
+
+// General API rate limit
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 120,
+  message: { success: false, error: 'Too many requests.' },
+  standardHeaders: true, legacyHeaders: false
+});
 
 const app = express();
 const PORT = 3001;
-const JWT_SECRET = process.env.JWT_SECRET || 'velo-central-jwt-secret-2024-change-in-prod';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  console.error('❌  JWT_SECRET must be set in .env (use a long random string)');
+  process.exit(1);
+}
 const SALT_ROUNDS = 10;
 
 // ─────────────────────────────────────────────
@@ -52,13 +73,31 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
 // ─────────────────────────────────────────────
 // MIDDLEWARE
 // ─────────────────────────────────────────────
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+  : ['http://localhost:3002', 'http://localhost:5500', 'http://127.0.0.1:5500'];
+
 app.use(cors({
-  origin: '*',
+  origin: (origin, cb) => {
+    // Allow server-to-server (no origin) and listed origins
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    cb(new Error('CORS: origin not allowed'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
-app.use(express.json());
+app.use(express.json({ limit: '50kb' }));
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.removeHeader('X-Powered-By');
+  next();
+});
+app.use(apiLimiter);
 app.use(cookieParser());
 
 // ─────────────────────────────────────────────
@@ -81,7 +120,7 @@ async function generateUniqueLicenseKey() {
       .select('id')
       .eq('license_key', key)
       .maybeSingle();
-    if (!data) break; // key is unique
+    if (!data) break;
   } while (true);
   return key;
 }
@@ -142,7 +181,7 @@ function requireAuth(req, res, next) {
         role: 'superadmin'
       });
       if (error) throw error;
-      console.log('[SEED] Default admin created in Supabase. PIN: 123456');
+      console.log('[SEED] Default admin created. Change the PIN immediately via /api/admin/change-pin');
     } else {
       console.log('[SEED] Admin already exists in Supabase.');
     }
@@ -175,7 +214,7 @@ app.get('/health', async (req, res) => {
 // ROUTES: ADMIN AUTH
 // ─────────────────────────────────────────────
 
-app.post('/api/admin/login', async (req, res) => {
+app.post('/api/admin/login', authLimiter, async (req, res) => {
   try {
     const { pin } = req.body;
     if (!pin) return res.status(400).json({ success: false, error: 'PIN is required' });
@@ -255,7 +294,6 @@ app.post('/api/admin/licenses/generate', requireAuth, async (req, res) => {
       notes
     } = req.body;
 
-    // Required fields
     const required = { client_name, client_email, client_phone, supabase_url, supabase_anon_key, admin_username, admin_password };
     for (const [field, value] of Object.entries(required)) {
       if (!value || String(value).trim() === '')
@@ -264,7 +302,6 @@ app.post('/api/admin/licenses/generate', requireAuth, async (req, res) => {
 
     const normalizedUsername = String(admin_username).trim().toLowerCase();
 
-    // Username uniqueness check in Supabase
     const { data: existingUser } = await supabase
       .from('central_licenses')
       .select('id')
@@ -424,6 +461,101 @@ app.put('/api/admin/licenses/:id/reset-activation', requireAuth, async (req, res
   }
 });
 
+// ─────────────────────────────────────────────
+// ROUTE: RENEW LICENSE — delete old key, issue new one (same client data)
+// ─────────────────────────────────────────────
+app.post('/api/admin/licenses/:id/renew', requireAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id);
+    const { duration_days, plan, notes } = req.body;
+
+    // Fetch existing license
+    const { data: old, error: fetchErr } = await supabase
+      .from('central_licenses').select('*').eq('id', id).maybeSingle();
+
+    if (fetchErr || !old)
+      return res.status(404).json({ success: false, error: 'License not found' });
+    if (old.is_revoked)
+      return res.status(400).json({ success: false, error: 'Cannot renew a revoked license' });
+
+    // Store old data before deletion
+    const oldKey = old.license_key;
+    const oldActivatedShopId = old.activated_shop_id;
+    const oldAdminUsername = old.admin_username;
+
+    // FIRST: Delete the old license to free up the admin_username
+    const { error: deleteErr } = await supabase
+      .from('central_licenses')
+      .delete()
+      .eq('id', id);
+    
+    if (deleteErr) throw deleteErr;
+
+    // Generate fresh key
+    const newKey = await generateUniqueLicenseKey();
+    const days = parseInt(duration_days) || old.duration_days || 365;
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + days);
+
+    // Create new record with the same admin_username (now available since old is deleted)
+    const newRecord = {
+      license_key: newKey,
+      client_name: old.client_name,
+      client_company: old.client_company,
+      client_email: old.client_email,
+      client_phone: old.client_phone,
+      client_address: old.client_address,
+      shop_name: old.shop_name,
+      shop_address: old.shop_address,
+      supabase_url: old.supabase_url,
+      supabase_anon_key: old.supabase_anon_key,
+      admin_username: oldAdminUsername,
+      admin_password_hash: old.admin_password_hash,
+      admin_full_name: old.admin_full_name,
+      plan: plan && plan.trim() ? plan.trim() : old.plan,
+      max_seats: old.max_seats,
+      duration_days: days,
+      expires_at: expiresAt.toISOString(),
+      features: old.features,
+      is_active: true,
+      is_revoked: false,
+      activated_at: null,
+      activated_shop_id: null,
+      whatsapp_enabled: old.whatsapp_enabled,
+      twilio_account_sid: old.twilio_account_sid,
+      twilio_auth_token: old.twilio_auth_token,
+      twilio_whatsapp_from: old.twilio_whatsapp_from,
+      notes: notes ? notes.trim() : old.notes,
+      created_by: req.admin.username
+    };
+
+    const { data: inserted, error: insertErr } = await supabase
+      .from('central_licenses')
+      .insert(newRecord)
+      .select()
+      .single();
+    
+    if (insertErr) throw insertErr;
+
+    // Add logs
+    await addLog(oldKey, oldActivatedShopId, 'license_renewed', 'success',
+      `Old key deleted. New key: ${newKey}. Renewed by admin "${req.admin.username}" for ${days} days`);
+    await addLog(newKey, null, 'license_generated', 'success',
+      `Issued as renewal for "${old.client_name}" by admin "${req.admin.username}"`);
+
+    const { admin_password_hash: _, twilio_auth_token: __, ...safe } = inserted;
+    res.json({ 
+      success: true, 
+      message: 'License renewed — new key issued', 
+      new_license_key: newKey, 
+      license: safe 
+    });
+  } catch (err) {
+    console.error('[POST /api/admin/licenses/:id/renew]', err);
+    res.status(500).json({ success: false, error: 'Server error renewing license: ' + err.message });
+  }
+});
+
 app.get('/api/admin/logs', requireAuth, async (req, res) => {
   try {
     const { data: logs, count, error } = await supabase
@@ -445,7 +577,7 @@ app.get('/api/admin/logs', requireAuth, async (req, res) => {
 // ROUTES: PUBLIC LICENSE ENDPOINTS (used by client-server)
 // ─────────────────────────────────────────────
 
-app.post('/api/license-credentials', async (req, res) => {
+app.post('/api/license-credentials', authLimiter, async (req, res) => {
   try {
     const { license_key, admin_password } = req.body;
     if (!license_key || !admin_password)
@@ -476,11 +608,6 @@ app.post('/api/license-credentials', async (req, res) => {
     if (new Date(license.expires_at) < new Date()) {
       await addLog(license_key, null, 'credential_fetch', 'warning', 'License is expired');
       return res.status(403).json({ success: false, error: 'This license has expired' });
-    }
-
-    if (license.activated_shop_id && req.body.shop_id && license.activated_shop_id !== req.body.shop_id) {
-      await addLog(license_key, null, 'credential_fetch', 'failed', 'License already activated by another shop');
-      return res.status(403).json({ success: false, error: 'This license is already activated on another instance' });
     }
 
     await addLog(license_key, license.activated_shop_id, 'credential_fetch', 'success', 'Credentials fetched for setup');
@@ -516,7 +643,7 @@ app.post('/api/license-credentials', async (req, res) => {
   }
 });
 
-app.post('/api/validate-license', async (req, res) => {
+app.post('/api/validate-license', authLimiter, async (req, res) => {
   try {
     const { license_key, shop_id, action } = req.body;
     if (!license_key)
@@ -547,24 +674,20 @@ app.post('/api/validate-license', async (req, res) => {
     }
 
     if (action === 'activate') {
+      // Allow reactivation even if already activated (for renewal scenarios)
       if (license.activated_shop_id && license.activated_shop_id !== shop_id) {
-        await addLog(license_key, shop_id, 'activate', 'failed',
-          `Activation attempted by different shop. Locked to: ${license.activated_shop_id}`);
-        return res.status(403).json({
-          success: false, valid: false,
-          error: 'License is already activated on another shop instance'
-        });
+        await addLog(license_key, shop_id, 'activate', 'warning',
+          `License was previously activated on ${license.activated_shop_id}. Reactivating on ${shop_id}`);
       }
 
-      if (!license.activated_shop_id) {
-        const { error: updateErr } = await supabase
-          .from('central_licenses')
-          .update({ activated_at: new Date().toISOString(), activated_shop_id: shop_id })
-          .eq('id', license.id);
+      // Update activation info
+      const { error: updateErr } = await supabase
+        .from('central_licenses')
+        .update({ activated_at: new Date().toISOString(), activated_shop_id: shop_id })
+        .eq('id', license.id);
 
-        if (updateErr) throw updateErr;
-        await addLog(license_key, shop_id, 'activate', 'success', `License activated for shop: ${shop_id}`);
-      }
+      if (updateErr) throw updateErr;
+      await addLog(license_key, shop_id, 'activate', 'success', `License activated for shop: ${shop_id}`);
     } else {
       await addLog(license_key, shop_id, action || 'validate', 'success', 'License valid');
     }
@@ -593,7 +716,7 @@ app.post('/api/validate-license', async (req, res) => {
   }
 });
 
-app.get('/api/license-info/:key', async (req, res) => {
+app.get('/api/license-info/:key', authLimiter, async (req, res) => {
   try {
     const key = req.params.key.trim().toUpperCase();
     const { data: license, error } = await supabase
@@ -606,22 +729,18 @@ app.get('/api/license-info/:key', async (req, res) => {
       (new Date(license.expires_at) - new Date()) / (1000 * 60 * 60 * 24)
     ));
 
+    // Public endpoint — return ONLY non-sensitive status fields
     res.json({
       success: true,
       license: {
         license_key: license.license_key,
         shop_name: license.shop_name,
-        client_name: license.client_name,
-        client_company: license.client_company,
         plan: license.plan,
-        max_seats: license.max_seats,
-        features: license.features,
         expires_at: license.expires_at,
         days_remaining: daysLeft,
         is_active: license.is_active,
         is_revoked: license.is_revoked,
         whatsapp_enabled: license.whatsapp_enabled,
-        activated_at: license.activated_at,
         status: getLicenseStatus(license)
       }
     });
@@ -739,7 +858,7 @@ app.listen(PORT, () => {
   console.log('║   VELO Central License Server             ║');
   console.log(`║   Running on http://localhost:${PORT}         ║`);
   console.log('║   Storage: Supabase                       ║');
-  console.log('║   Default Admin PIN: 123456               ║');
+  console.log('║   Change default PIN immediately!         ║');
   console.log('╚═══════════════════════════════════════════╝');
   console.log('');
 });
