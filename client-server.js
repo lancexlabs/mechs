@@ -41,8 +41,8 @@ const apiLimiter = rateLimit({
 });
 
 const app = express();
-const PORT = 3002;
-const CENTRAL_SERVER = 'http://localhost:3001';
+const PORT = process.env.PORT || 3002;
+const CENTRAL_SERVER = process.env.CENTRAL_SERVER_URL || 'https://velo-central.onrender.com';
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   console.error('❌  JWT_SECRET must be set in .env');
@@ -55,12 +55,21 @@ const SALT_ROUNDS = 10;
 // ─────────────────────────────────────────────
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-  : ['http://localhost:5500', 'http://127.0.0.1:5500', 'null'];
+  : [
+      'http://localhost:5500', 'http://127.0.0.1:5500',
+      'http://localhost:3000', 'http://127.0.0.1:3000',
+      'https://lancexlabs.github.io',
+      'null'
+    ];
 
 app.use(cors({
   origin: (origin, cb) => {
-    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
-    cb(new Error('CORS: origin not allowed'));
+    if (!origin) return cb(null, true);
+    if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    if (/^https:\/\/[a-z0-9-]+\.github\.io$/.test(origin)) return cb(null, true);
+    if (/^https:\/\/[a-z0-9-]+\.onrender\.com$/.test(origin)) return cb(null, true);
+    if (/^https:\/\/[a-z0-9-]+\.netlify\.app$/.test(origin)) return cb(null, true);
+    cb(new Error('CORS: origin not allowed — ' + origin));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
