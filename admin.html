@@ -155,6 +155,8 @@ textarea{resize:vertical;min-height:80px}
 .btn-ghost{background:transparent;color:var(--text2);border:1px solid var(--border2)}
 .btn-ghost:hover{border-color:var(--text2);color:var(--text)}
 .btn-sm{padding:7px 12px;font-size:.78rem}
+.btn-warning{background:var(--yellow-dim);color:var(--yellow);border:1px solid rgba(255,215,0,.3)}
+.btn-warning:hover:not(:disabled){background:rgba(255,215,0,.25)}
 
 /* ── TABLE ── */
 .table-wrapper{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border)}
@@ -174,7 +176,7 @@ tr:hover td{background:rgba(255,255,255,.02)}
 .badge-yellow{background:var(--yellow-dim);color:var(--yellow);border:1px solid rgba(255,215,0,.3)}
 .badge-blue{background:var(--blue-dim);color:var(--blue);border:1px solid rgba(68,136,255,.3)}
 .badge-gray{background:rgba(255,255,255,.06);color:var(--text2);border:1px solid var(--border)}
-.actions-cell{display:flex;gap:8px;align-items:center}
+.actions-cell{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .wa-icon{color:var(--accent);font-size:.9rem}
 
 /* ── EMPTY STATE ── */
@@ -296,7 +298,6 @@ tr:hover td{background:rgba(255,255,255,.02)}
         <div class="stat-value" id="stat-bad">—</div>
       </div>
     </div>
-
 
     <!-- Supabase Status Bar -->
     <div id="supa-status-bar" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px;margin-bottom:24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">
@@ -628,7 +629,6 @@ async function submitLogin(){
 // Keyboard support
 document.addEventListener('keydown', e => {
   if(document.getElementById('app-page').classList.contains('visible')) return;
-  // Don't intercept if modal input is focused
   const active = document.activeElement;
   if(active && (active.tagName==='INPUT' || active.tagName==='TEXTAREA')) return;
   if(e.key >= '0' && e.key <= '9') pinPress(e.key);
@@ -804,7 +804,7 @@ function clearForm(){
 }
 
 // ══════════════════════════════════════════
-// LOAD LICENSES TABLE
+// LOAD LICENSES TABLE (WITH RENEW BUTTON)
 // ══════════════════════════════════════════
 async function loadLicenses(){
   const tbody = document.getElementById('licenses-tbody');
@@ -859,6 +859,11 @@ function renderLicenseRow(l){
     ? `<button class="btn btn-ghost btn-sm" onclick="resetActivation(${l.id})" title="Reset activation lock">↺ Reset</button>`
     : '';
 
+  // RENEW BUTTON - creates new license and deletes old one
+  const renewBtn = !l.is_revoked
+    ? `<button class="btn btn-warning btn-sm" onclick="renewLicense(${l.id})" title="Generate new license key and delete old one">🔄 Renew</button>`
+    : '';
+
   return `<tr>
     <td><span class="mono" style="color:var(--accent)">${l.license_key}</span> ${waIcon}</td>
     <td>${esc(l.client_name)}</td>
@@ -868,7 +873,7 @@ function renderLicenseRow(l){
     <td>${expStr}</td>
     <td>${statusBadge}</td>
     <td>${activatedStr}</td>
-    <td><div class="actions-cell">${revokeBtn}${resetBtn}</div></td>
+    <td><div class="actions-cell">${revokeBtn}${resetBtn}${renewBtn}</div></td>
   </tr>`;
 }
 
@@ -898,9 +903,32 @@ async function resetActivation(id){
   }catch(e){ toast(e.message,'error'); }
 }
 
-// ══════════════════════════════════════════
-// LOAD LOGS TABLE
-// ══════════════════════════════════════════
+// RENEW FUNCTION - creates new license key and deletes the old one
+async function renewLicense(id){
+  if(!confirm('Renew this license? This will generate a NEW license key and DELETE the old one. The shop will need to re-activate with the new key.')) return;
+  
+  const days = prompt('How many days for the new license? (30, 90, 180, 365, 730)', '365');
+  if(!days) return;
+  const daysNum = parseInt(days);
+  if(isNaN(daysNum) || daysNum < 1) { toast('Invalid days value', 'error'); return; }
+  
+  const plan = prompt('Enter plan (trial, standard, gold, pro):', 'standard');
+  if(!plan) return;
+  const validPlans = ['trial', 'standard', 'gold', 'pro'];
+  if(!validPlans.includes(plan.toLowerCase())) { toast('Invalid plan', 'error'); return; }
+  
+  try{
+    const r = await api('POST',`/api/admin/licenses/${id}/renew`, { duration_days: daysNum, plan: plan.toLowerCase() });
+    if(r.ok && r.data.success){
+      toast(`✅ License renewed! New key: ${r.data.new_license_key}`, 'success', 8000);
+      loadLicenses();
+      loadStats();
+    } else {
+      toast(r.data.error||'Failed to renew license','error');
+    }
+  }catch(e){ toast(e.message,'error'); }
+}
+
 async function loadLogs(){
   const tbody = document.getElementById('logs-tbody');
   tbody.innerHTML='<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text3)"><span class="spinner"></span></td></tr>';
@@ -946,7 +974,7 @@ function esc(str){
 }
 
 // ══════════════════════════════════════════
-// SUPABASE STATUS (reads from central server .env)
+// SUPABASE STATUS
 // ══════════════════════════════════════════
 async function checkAdminSupabaseStatus(){
   const dot = document.getElementById('adm-supa-dot');
@@ -957,7 +985,6 @@ async function checkAdminSupabaseStatus(){
   const last = document.getElementById('adm-supa-last');
   const btn = document.getElementById('adm-supa-btn');
 
-  // Checking state
   dot.style.background = 'var(--yellow)';
   dot.style.boxShadow = '0 0 8px rgba(255,215,0,.4)';
   label.textContent = 'Checking…';
